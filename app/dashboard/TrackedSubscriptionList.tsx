@@ -3,6 +3,7 @@
 
 import { useMemo } from "react";
 import type { TrackedSub } from "./types";
+import MerchantIcon from "@/app/components/MerchantIcon";
 
 function parseRenewalDate(dateStr: string) {
   const d = dateStr.includes("T")
@@ -78,21 +79,53 @@ export default function TrackedSubscriptionList({
               : `${left} day${left === 1 ? "" : "s"} left`;
 
           const isCancelled =
-            String(s.status).toLowerCase() === "cancelled" || !!(s as any).cancelled_at;
+            String(s.status).toLowerCase() === "cancelled" ||
+            !!(s as any).cancelled_at;
+
+          // warning condition (active + renews within 7 days)
+          const isWarning =
+            !isCancelled && left !== null && left >= 0 && left <= 7;
 
           return (
-            <div key={s.id} className="border rounded-lg p-4">
+            <div
+              key={s.id}
+              className={`border rounded-lg p-4 ${
+                isWarning ? "border-white/40" : ""
+              }`}
+            >
+              {/* TOP ROW */}
               <div className="flex items-center justify-between gap-3">
-                <div className="text-lg font-semibold">{s.merchant_name}</div>
+                {/* LEFT: icon + merchant name */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <MerchantIcon
+                    name={s.merchant_name}
+                    size={32}
+                    className="shrink-0"
+                  />
+                  <div className="text-lg font-semibold truncate">
+                    {s.merchant_name}
+                  </div>
+                </div>
 
-                <span className="text-sm border rounded px-2 py-1 opacity-90">
-                  {isCancelled ? "cancelled" : "active"}
-                </span>
+                {/* RIGHT: warning + status badges */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isWarning && (
+                    <span className="text-xs border rounded px-2 py-1">
+                      ⚠ Renews soon
+                    </span>
+                  )}
+
+                  <span className="text-sm border rounded px-2 py-1 opacity-90">
+                    {isCancelled ? "cancelled" : "active"}
+                  </span>
+                </div>
               </div>
 
+              {/* DETAILS */}
               <div className="mt-1 opacity-80">
                 {s.currency} {Number(s.amount).toFixed(2)}
-                {s.plan_name ? ` • Plan: ${s.plan_name}` : ""} • Status: {s.status}
+                {s.plan_name ? ` • Plan: ${s.plan_name}` : ""} • Status:{" "}
+                {s.status}
               </div>
 
               <div className="mt-1 opacity-80">
@@ -103,6 +136,7 @@ export default function TrackedSubscriptionList({
                 <div className="mt-2 opacity-80">Notes: {s.notes}</div>
               ) : null}
 
+              {/* ACTIONS */}
               <div className="mt-3 flex gap-3">
                 <button
                   className="border rounded-md px-3 py-2"
