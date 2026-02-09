@@ -16,26 +16,25 @@ export default function TrackedSubscriptionsSection({
   const [subs, setSubs] = useState<TrackedSub[]>(initialSubs ?? []);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // ✅ NEW: Renewing Soon (in-app alerts)
-  // Shows active subscriptions renewing in the next 7 days
+  // ✅ Renewing Soon (next 7 days) — ACTIVE ONLY
   const renewingSoon = useMemo(() => {
-    return subs
-      .filter((s) => s.status === "active")
-      .map((s) => ({
+    const list = subs
+      .filter((s: any) => String(s.status || "").toLowerCase() === "active")
+      .map((s: any) => ({
         ...s,
         daysLeft: daysUntil(s.renewal_date),
       }))
-      .filter((s) => s.daysLeft >= 0 && s.daysLeft <= 7)
-      .sort((a, b) => a.daysLeft - b.daysLeft);
+      .filter((s: any) => s.daysLeft !== null && s.daysLeft >= 0 && s.daysLeft <= 7)
+      .sort((a: any, b: any) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
+
+    return list;
   }, [subs]);
 
   // Used for duplicate warning in UI
   const dedupeKeySet = useMemo(() => {
     const set = new Set<string>();
-    for (const s of subs) {
-      set.add(
-        makeDedupeKey(s.merchant_name, s.amount, s.currency, s.renewal_date)
-      );
+    for (const s of subs as any[]) {
+      set.add(makeDedupeKey(s.merchant_name, s.amount, s.currency, s.renewal_date));
     }
     return set;
   }, [subs]);
@@ -50,11 +49,7 @@ export default function TrackedSubscriptionsSection({
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 409) {
-      return {
-        ok: false as const,
-        reason: "duplicate" as const,
-        message: data?.error,
-      };
+      return { ok: false as const, reason: "duplicate" as const, message: data?.error };
     }
 
     if (!res.ok) {
@@ -65,14 +60,12 @@ export default function TrackedSubscriptionsSection({
       };
     }
 
-    // ✅ API returns { sub: insertedRow }
     const created: TrackedSub | undefined = data?.sub;
 
-    if (created?.id) {
+    if ((created as any)?.id) {
       setSubs((prev) => {
         const next = [created, ...prev];
-        // keep sorted by renewal_date
-        next.sort((a, b) =>
+        next.sort((a: any, b: any) =>
           String(a.renewal_date).localeCompare(String(b.renewal_date))
         );
         return next;
@@ -83,10 +76,7 @@ export default function TrackedSubscriptionsSection({
   };
 
   const onDelete = async (id: string) => {
-    if (!id) {
-      alert("Missing id");
-      return;
-    }
+    if (!id) return alert("Missing id");
     if (!confirm("Delete this tracked subscription?")) return;
 
     try {
@@ -98,27 +88,16 @@ export default function TrackedSubscriptionsSection({
       );
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        alert(data?.error ?? "Failed to delete");
-        return;
-      }
+      if (!res.ok) return alert(data?.error ?? "Failed to delete");
 
-      // ✅ instant UI update (no reload)
-      setSubs((prev) => prev.filter((s) => s.id !== id));
+      setSubs((prev) => prev.filter((s: any) => s.id !== id));
     } finally {
       setBusyId(null);
     }
   };
 
-  // ✅ mark cancelled / reactivate (PATCH)
-  const onToggleCancel = async (
-    id: string,
-    action: "cancel" | "reactivate"
-  ) => {
-    if (!id) {
-      alert("Missing id");
-      return;
-    }
+  const onToggleCancel = async (id: string, action: "cancel" | "reactivate") => {
+    if (!id) return alert("Missing id");
 
     try {
       setBusyId(id);
@@ -133,17 +112,12 @@ export default function TrackedSubscriptionsSection({
       );
 
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        alert(data?.error ?? "Failed to update");
-        return;
-      }
+      if (!res.ok) return alert(data?.error ?? "Failed to update");
 
       const updated: TrackedSub | undefined = data?.sub;
-      if (!updated?.id) return;
+      if (!(updated as any)?.id) return;
 
-      // ✅ instant UI update (no reload)
-      setSubs((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setSubs((prev) => prev.map((s: any) => (s.id === (updated as any).id ? updated : s)));
     } finally {
       setBusyId(null);
     }
@@ -151,31 +125,40 @@ export default function TrackedSubscriptionsSection({
 
   return (
     <div className="mt-4">
-      {/* ✅ NEW: In-app reminders section */}
+      {/* ✅ Renewing Soon BOX (same style as dashboard cards) */}
       {renewingSoon.length > 0 && (
-        <div className="border border-white/20 rounded-xl p-4 mb-6">
-          <h3 className="text-lg font-semibold mb-2">Renewing Soon</h3>
+        <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur mb-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-black">Renewing Soon</h3>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
+              Next 7 days
+            </span>
+          </div>
 
           <div className="space-y-2">
-            {renewingSoon.map((s) => (
+            {renewingSoon.map((s: any) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between text-sm"
+                className="flex items-center justify-between rounded-xl border border-black/10 bg-white px-4 py-3"
               >
-                <div>
-                  <span className="font-medium">{s.merchant_name}</span>{" "}
-                  <span className="opacity-70">
-                    renews in {s.daysLeft} day{s.daysLeft === 1 ? "" : "s"}
-                  </span>
+                <div className="min-w-0">
+                  <div className="font-semibold leading-tight truncate">
+                    {s.merchant_name ?? "Subscription"}
+                  </div>
+                  <div className="text-xs text-black/55">
+                    Renews {badgeText(s.daysLeft)}
+                  </div>
                 </div>
 
-                <span className="px-2 py-1 rounded border border-white/20 text-xs">
-                  {formatDate(s.renewal_date)}
-                </span>
+                <div className="text-right shrink-0">
+                  <div className="text-xs text-black/55">
+                    {formatDate(s.renewal_date)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       <TrackedSubscriptionList
@@ -186,21 +169,19 @@ export default function TrackedSubscriptionsSection({
       />
 
       <div className="mt-6">
-        <TrackedSubscriptionForm
-          dedupeKeySet={dedupeKeySet}
-          onCreate={onCreate}
-        />
+        <TrackedSubscriptionForm dedupeKeySet={dedupeKeySet} onCreate={onCreate} />
       </div>
     </div>
   );
 }
 
-/** ✅ NEW helpers (local to this file for simplicity) */
+/** Helpers */
 function daysUntil(dateInput: string | Date) {
   const today = new Date();
   const target = new Date(dateInput);
 
-  // normalize to midnight to avoid timezone issues
+  if (Number.isNaN(target.getTime())) return null;
+
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
 
@@ -214,15 +195,20 @@ function formatDate(dateStr: string) {
   return d.toLocaleDateString();
 }
 
-function normalizeVendor(v: string) {
-  return v.trim().toLowerCase();
+function badgeText(daysLeft: number | null) {
+  if (daysLeft === null) return "—";
+  if (daysLeft <= 0) return "today";
+  if (daysLeft === 1) return "in 1 day";
+  return `in ${daysLeft} days`;
 }
 
+function normalizeVendor(v: string) {
+  return (v || "").trim().toLowerCase();
+}
 function normalizeDate(dateStr: string) {
   if (!dateStr) return "";
-  return dateStr.includes("T") ? dateStr.slice(0, 10) : dateStr; // YYYY-MM-DD
+  return dateStr.includes("T") ? dateStr.slice(0, 10) : dateStr;
 }
-
 function makeDedupeKey(
   merchant_name: string,
   amount: number,

@@ -1,169 +1,192 @@
 // app/dashboard/TrackedSubscriptionList.tsx
 "use client";
 
-import { useMemo } from "react";
+import React from "react";
 import type { TrackedSub } from "./types";
 import MerchantIcon from "@/app/components/MerchantIcon";
 
-function parseRenewalDate(dateStr: string) {
-  const d = dateStr.includes("T")
-    ? new Date(dateStr)
-    : new Date(`${dateStr}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function daysUntil(dateStr: string) {
-  const target = parseRenewalDate(dateStr);
-  if (!target) return null;
-
-  const now = new Date();
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startTarget = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate()
-  );
-
-  const diffMs = startTarget.getTime() - startToday.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function formatDate(dateStr: string) {
-  const d = parseRenewalDate(dateStr);
-  return d ? d.toLocaleDateString() : dateStr;
-}
+type Props = {
+  subs: TrackedSub[];
+  busyId: string | null;
+  onDelete: (id: string) => void;
+  onToggleCancel: (id: string, action: "cancel" | "reactivate") => void;
+};
 
 export default function TrackedSubscriptionList({
   subs,
   busyId,
   onDelete,
   onToggleCancel,
-}: {
-  subs: TrackedSub[];
-  busyId: string | null;
-  onDelete: (id: string) => void;
-  onToggleCancel: (id: string, nextAction: "cancel" | "reactivate") => void;
-}) {
-  const sorted = useMemo(() => {
-    const list = Array.isArray(subs) ? [...subs] : [];
-    list.sort((a, b) => {
-      const da = parseRenewalDate(a.renewal_date)?.getTime() ?? 0;
-      const db = parseRenewalDate(b.renewal_date)?.getTime() ?? 0;
-      return da - db;
-    });
-    return list;
-  }, [subs]);
-
-  if (sorted.length === 0) {
+}: Props) {
+  if (!subs || subs.length === 0) {
     return (
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold">Tracked Subscriptions</h2>
-        <p className="mt-2 opacity-70">No tracked subscriptions yet.</p>
-      </div>
+      <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <h3 className="text-base font-semibold text-black">Tracked Subscriptions</h3>
+        <p className="mt-2 text-sm text-black/60">No subscriptions yet.</p>
+      </section>
     );
   }
 
   return (
-    <div className="mt-6">
-      <h2 className="text-xl font-semibold">Tracked Subscriptions</h2>
+    <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-black">Tracked Subscriptions</h3>
+        <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
+          {subs.length} total
+        </span>
+      </div>
 
-      <div className="mt-3 space-y-3">
-        {sorted.map((s) => {
-          const left = daysUntil(s.renewal_date);
+      <div className="space-y-3">
+        {subs.map((s: any) => {
+          const id = String(s.id ?? "");
+          const vendor = String(s.merchant_name ?? s.vendor ?? "Subscription");
+          const plan = String(s.plan_name ?? s.plan ?? "Subscription");
 
-          const leftText =
-            left === null
-              ? "—"
-              : left < 0
-              ? `${Math.abs(left)} days ago`
-              : `${left} day${left === 1 ? "" : "s"} left`;
+          const status = String(s.status ?? "active").toLowerCase();
+          const isCancelled = status === "cancelled" || !!s.cancelled_at;
+          const isBusy = busyId === id;
 
-          const isCancelled =
-            String(s.status).toLowerCase() === "cancelled" ||
-            !!(s as any).cancelled_at;
+          const daysLeft = daysUntil(s.renewal_date);
+          const renewsSoon =
+            !isCancelled && daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
 
-          // warning condition (active + renews within 7 days)
-          const isWarning =
-            !isCancelled && left !== null && left >= 0 && left <= 7;
+          const currency = String(s.currency ?? "USD");
+          const amountText = formatAmount(s.amount);
 
           return (
             <div
-              key={s.id}
-              className={`border rounded-lg p-4 ${
-                isWarning ? "border-white/40" : ""
+              key={id}
+              className={`rounded-2xl border border-black/10 bg-white px-4 py-4 ${
+                isCancelled ? "opacity-70" : ""
               }`}
             >
-              {/* TOP ROW */}
-              <div className="flex items-center justify-between gap-3">
-                {/* LEFT: icon + merchant name */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <MerchantIcon
-                    name={s.merchant_name}
-                    size={32}
-                    className="shrink-0"
-                  />
-                  <div className="text-lg font-semibold truncate">
-                    {s.merchant_name}
+              <div className="flex items-start justify-between gap-4">
+                {/* Left side */}
+                <div className="flex min-w-0 items-start gap-3">
+                  <MerchantIcon name={vendor} size={40} className="shrink-0" />
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="truncate text-base font-semibold text-black">
+                        {vendor}
+                      </div>
+
+                      {/* Renews soon pill */}
+                      {renewsSoon && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-xs text-black/70">
+                          <span aria-hidden>⚠️</span> Renews soon
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-0.5 truncate text-sm text-black/55">
+                      {currency} {amountText} · Status:{" "}
+                      <span className="font-medium text-black/70">
+                        {isCancelled ? "cancelled" : "active"}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 text-sm text-black/55">
+                      Renews on{" "}
+                      <span className="font-medium text-black/70">
+                        {formatDate(s.renewal_date)}
+                      </span>
+                      {daysLeft !== null && !isCancelled ? (
+                        <span className="text-black/50">
+                          {" "}
+                          ({daysLeft} day{daysLeft === 1 ? "" : "s"} left)
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
-                {/* RIGHT: warning + status badges */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {isWarning && (
-                    <span className="text-xs border rounded px-2 py-1">
-                      ⚠ Renews soon
-                    </span>
-                  )}
-
-                  <span className="text-sm border rounded px-2 py-1 opacity-90">
+                {/* Right side badges */}
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-1 text-xs ${
+                      isCancelled
+                        ? "border-black/10 bg-white text-black/55"
+                        : "border-black/10 bg-white text-black/70"
+                    }`}
+                  >
                     {isCancelled ? "cancelled" : "active"}
                   </span>
                 </div>
               </div>
 
-              {/* DETAILS */}
-              <div className="mt-1 opacity-80">
-                {s.currency} {Number(s.amount).toFixed(2)}
-                {s.plan_name ? ` • Plan: ${s.plan_name}` : ""} • Status:{" "}
-                {s.status}
-              </div>
-
-              <div className="mt-1 opacity-80">
-                Renews on {formatDate(s.renewal_date)} ({leftText})
-              </div>
-
-              {s.notes ? (
-                <div className="mt-2 opacity-80">Notes: {s.notes}</div>
-              ) : null}
-
-              {/* ACTIONS */}
-              <div className="mt-3 flex gap-3">
-                <button
-                  className="border rounded-md px-3 py-2"
-                  onClick={() =>
-                    onToggleCancel(s.id, isCancelled ? "reactivate" : "cancel")
-                  }
-                  disabled={busyId === s.id}
-                >
-                  {busyId === s.id
-                    ? "Updating..."
-                    : isCancelled
-                    ? "Reactivate"
-                    : "Mark Cancelled"}
-                </button>
+              {/* Actions */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {!isCancelled ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleCancel(id, "cancel")}
+                    disabled={isBusy}
+                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60"
+                    title="Mark this subscription as cancelled (it will not be deleted)"
+                  >
+                    {isBusy ? "Working..." : "Mark Cancelled"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onToggleCancel(id, "reactivate")}
+                    disabled={isBusy}
+                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60"
+                    title="Reactivate this subscription"
+                  >
+                    {isBusy ? "Working..." : "Reactivate"}
+                  </button>
+                )}
 
                 <button
-                  className="border rounded-md px-3 py-2"
-                  onClick={() => onDelete(s.id)}
-                  disabled={busyId === s.id}
+                  type="button"
+                  onClick={() => onDelete(id)}
+                  disabled={isBusy}
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60"
                 >
-                  {busyId === s.id ? "Working..." : "Delete"}
+                  {isBusy ? "Working..." : "Delete"}
                 </button>
               </div>
+
+              {/* small helper text */}
+              <p className="mt-2 text-xs text-black/45">
+                Mark Cancelled does <span className="font-medium">not</span>{" "}
+                delete — it just stops reminders and marks it cancelled.
+              </p>
             </div>
           );
         })}
       </div>
-    </div>
+    </section>
   );
+}
+
+/* Helpers */
+
+function daysUntil(dateInput: string | Date) {
+  const today = new Date();
+  const target = new Date(dateInput);
+
+  if (Number.isNaN(target.getTime())) return null;
+
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+
+  const diffMs = target.getTime() - today.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleDateString();
+}
+
+function formatAmount(amount: any) {
+  if (typeof amount === "number") return amount.toFixed(2);
+  if (typeof amount === "string" && amount.trim() !== "" && !Number.isNaN(Number(amount))) {
+    return Number(amount).toFixed(2);
+  }
+  return "—";
 }
