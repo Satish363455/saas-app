@@ -4,117 +4,147 @@ import React, { useMemo, useState } from "react";
 
 type Props = {
   name?: string | null;
-  size?: number; // px
+  size?: number;
   className?: string;
 };
 
 /**
- * ✅ Put these SVGs in: public/icons/
- * - netflix.svg
- * - youtube.svg
- * - spotify.svg
- * - applemusic.svg
- * - amazonprime.svg
- * - amazon.svg (optional)
- * - default.svg (optional)
- *
- * IMPORTANT: Filenames must match EXACTLY.
+ * Alias map:
+ * normalized input -> official domain
+ * Add new aliases here anytime.
  */
+const DOMAIN_MAP: Record<string, string> = {
+  // ---- Streaming ----
+  netflix: "netflix.com",
+  netflx: "netflix.com",
 
-// exact-key match after sanitize
-const ICON_MAP: Record<string, string> = {
-  netflix: "netflix.svg",
-  youtube: "youtube.svg",
-  youtubepremium: "youtube.svg",
-  yt: "youtube.svg",
+  hulu: "hulu.com",
 
-  spotify: "spotify.svg",
+  disney: "disneyplus.com",
+  disneyplus: "disneyplus.com",
 
-  applemusic: "applemusic.svg",
-  apple: "applemusic.svg", // optional (if user types "apple")
-  music: "applemusic.svg", // optional
+  max: "max.com",
+  hbo: "hbomax.com",
+  hbomax: "hbomax.com",
 
-  amazon: "amazon.svg",
-  amazonprime: "amazonprime.svg",
-  prime: "amazonprime.svg",
-  primevideo: "amazonprime.svg",
-  primevideos: "amazonprime.svg",
+  youtube: "youtube.com",
+  youtubepremium: "youtube.com",
+  yt: "youtube.com",
+  youube: "youtube.com",
+
+  peacock: "peacocktv.com",
+  paramount: "paramountplus.com",
+
+  // ---- Amazon / Prime ----
+  prime: "primevideo.com",
+  primevideo: "primevideo.com",
+  primevideos: "primevideo.com",
+  primevides: "primevideo.com", // common typo
+  amazonprime: "primevideo.com",
+  amazonprimevideo: "primevideo.com",
+  amazon: "amazon.com",
+
+  // ---- Apple ----
+  applemusic: "music.apple.com",
+  appletv: "tv.apple.com",
+  appletvplus: "tv.apple.com",
+
+  // ---- Music ----
+  spotify: "spotify.com",
+  spotfy: "spotify.com",
+  audible: "audible.com",
+  pandora: "pandora.com",
+
+  // ---- Cloud / Productivity ----
+  dropbox: "dropbox.com",
+  icloud: "icloud.com",
+  googleone: "one.google.com",
+  onedrive: "onedrive.live.com",
+  notion: "notion.so",
+  canva: "canva.com",
+  zoom: "zoom.us",
+  grammarly: "grammarly.com",
+
+  // ---- Learning ----
+  coursera: "coursera.org",
+  udemy: "udemy.com",
+  linkedin: "linkedin.com",
+  duolingo: "duolingo.com",
+
+  // ---- Shopping / Delivery ----
+  walmart: "walmart.com",
+  doordash: "doordash.com",
+  uber: "uber.com",
+  grubhub: "grubhub.com",
+  instacart: "instacart.com",
+
+  // ---- Security / VPN ----
+  nordvpn: "nordvpn.com",
+  expressvpn: "expressvpn.com",
+  bitdefender: "bitdefender.com",
+  onepassword: "1password.com",
+
+  // ---- Creator / Web ----
+  patreon: "patreon.com",
+  substack: "substack.com",
+  medium: "medium.com",
 };
 
-function sanitizeName(name?: string | null) {
-  if (!name) return "";
-  return String(name).toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 /**
- * ✅ Better: detect "prime" anywhere:
- * - "Amazon Prime" -> amazonprime.svg
- * - "prime videos" -> amazonprime.svg
- * - "primevideo"   -> amazonprime.svg
+ * Normalize user input:
+ * - lowercase
+ * - remove spaces, punctuation, +
+ * This lets "You Tube", "prime vides", etc. resolve correctly.
  */
-function pickFilename(originalName?: string | null) {
-  const raw = String(originalName ?? "").toLowerCase();
-  const key = sanitizeName(originalName);
-
-  // 1) strong keyword detection (works even if user types spaces)
-  // Prime variations
-  if (raw.includes("prime")) return "amazonprime.svg";
-
-  // Apple Music variations
-  if (raw.includes("apple") && raw.includes("music")) return "applemusic.svg";
-  if (raw.includes("applemusic")) return "applemusic.svg";
-
-  // YouTube variations
-  if (raw.includes("youtube") || raw.includes("you tube")) return "youtube.svg";
-
-  // Spotify variations
-  if (raw.includes("spotify")) return "spotify.svg";
-
-  // Netflix variations
-  if (raw.includes("netflix")) return "netflix.svg";
-
-  // 2) exact sanitize key match
-  if (ICON_MAP[key]) return ICON_MAP[key];
-
-  // 3) optional: try direct file by sanitized name: <key>.svg
-  // Example: if user types "mobile recharge" -> tries mobilerecharge.svg
-  if (key) return `${key}.svg`;
-
-  return null;
+function normalize(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/\+/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-export default function MerchantIcon({ name, size = 40, className = "" }: Props) {
-  const [hasError, setHasError] = useState(false);
+export default function MerchantIcon({
+  name,
+  size = 40,
+  className = "",
+}: Props) {
+  const [error, setError] = useState(false);
 
-  // ✅ reset error when name changes (important!)
-  const filename = useMemo(() => pickFilename(name), [name]);
+  const domain = useMemo(() => {
+    if (!name) return "";
+    const key = normalize(name);
+    return DOMAIN_MAP[key] || "";
+  }, [name]);
 
-  // If name changes, we must allow image to try again
-  React.useEffect(() => {
-    setHasError(false);
-  }, [filename]);
+  const src = domain
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(
+        domain
+      )}&sz=${Math.max(32, size)}`
+    : "";
 
-  const src = filename ? `/icons/${filename}` : null;
-  const letter = (name ?? "S").charAt(0).toUpperCase();
+  const fallbackLetter = (name ?? "S").charAt(0).toUpperCase();
 
   return (
     <div
-      className={`grid place-items-center rounded-xl border border-black/10 bg-white ${className}`}
+      className={`grid place-items-center overflow-hidden rounded-xl border border-black/10 bg-white ${className}`}
       style={{ width: size, height: size }}
       title={name ?? "Subscription"}
       aria-label={name ?? "Subscription"}
     >
-      {!hasError && src ? (
+      {!error && src ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt={name ?? "icon"}
           width={size}
           height={size}
           className="h-full w-full object-contain p-1"
-          onError={() => setHasError(true)}
+          onError={() => setError(true)}
         />
       ) : (
-        <span className="text-sm font-semibold text-black/70">{letter}</span>
+        <span className="text-sm font-semibold text-black/70">
+          {fallbackLetter}
+        </span>
       )}
     </div>
   );
