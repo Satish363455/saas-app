@@ -7,14 +7,22 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (error || !user) redirect("/login");
 
-  await supabase.from("profiles").upsert({ id: user.id, email: user.email }, { onConflict: "id" });
+  // Ensure profile row exists
+  await supabase
+    .from("profiles")
+    .upsert({ id: user.id, email: user.email }, { onConflict: "id" });
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, avatar_url")
+    .select("full_name, avatar_url, phone, bio")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -28,7 +36,9 @@ export default async function AccountPage() {
           email={user.email ?? ""}
           initial={{
             full_name: profile?.full_name ?? "",
-            avatar_url: profile?.avatar_url ?? "",
+            avatar_url: profile?.avatar_url ?? null,
+            phone: profile?.phone ?? "",
+            bio: profile?.bio ?? "",
           }}
         />
       </div>

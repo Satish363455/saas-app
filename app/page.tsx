@@ -1,6 +1,7 @@
 // app/page.tsx
 import Link from "next/link";
 import MerchantIcon from "@/app/components/MerchantIcon";
+import { Plus, Bell, BarChart3 } from "lucide-react";
 
 const demo = [
   { name: "Netflix", plan: "Premium Monthly" },
@@ -21,8 +22,8 @@ export default function HomePage() {
           </h1>
 
           <p className="max-w-xl text-lg text-zinc-600">
-            Track, manage, and get reminders for upcoming renewals all in one place.
-            Never forget another subscription payment.
+            Track, manage, and get reminders for upcoming renewals all in one
+            place. Never forget another subscription payment.
           </p>
 
           <div className="flex gap-4">
@@ -33,18 +34,14 @@ export default function HomePage() {
               Start for Free
             </Link>
 
-            <button className="rounded-xl border px-6 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50">
-              Book a Demo
-            </button>
+
           </div>
         </div>
 
         {/* DASHBOARD PREVIEW */}
         <div className="rounded-2xl border bg-white shadow-sm">
           <div className="flex items-center justify-between border-b px-5 py-4">
-            <div className="text-sm font-semibold text-zinc-900">
-              Dashboards
-            </div>
+            <div className="text-sm font-semibold text-zinc-900">Dashboards</div>
 
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -63,12 +60,8 @@ export default function HomePage() {
                   <div className="flex items-center gap-3">
                     <MerchantIcon name={s.name} size={40} />
                     <div>
-                      <div className="text-sm font-semibold">
-                        {s.name}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        {s.plan}
-                      </div>
+                      <div className="text-sm font-semibold">{s.name}</div>
+                      <div className="text-xs text-zinc-500">{s.plan}</div>
                     </div>
                   </div>
 
@@ -82,51 +75,35 @@ export default function HomePage() {
 
       {/* HOW IT WORKS */}
       <section className="rounded-2xl border bg-white p-10 shadow-sm">
-        <h2 className="text-2xl font-bold text-zinc-900">
-          How it works
-        </h2>
+        <h2 className="text-2xl font-bold text-zinc-900">How it works</h2>
 
         <div className="mt-8 grid gap-8 md:grid-cols-3">
-          <Link
-            href="/dashboard#add-subscription"
-            className="group text-center"
-          >
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl group-hover:bg-zinc-200">
-              +
+          <Link href="/dashboard#add-subscription" className="group text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl transition group-hover:bg-zinc-200">
+              <Plus className="h-6 w-6" />
             </div>
-            <div className="mt-4 text-base font-semibold">
-              Add Subscription
-            </div>
+            <div className="mt-4 text-base font-semibold">Add Subscription</div>
             <div className="mt-2 text-sm text-zinc-600">
               Track purchases at an expense your wallet tolerates.
             </div>
           </Link>
 
-          <Link
-            href="/settings"
-            className="group text-center"
-          >
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl group-hover:bg-zinc-200">
-              +
+          {/* Profile/Account is usually where reminder email + contact details live */}
+          <Link href="/account" className="group text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl transition group-hover:bg-zinc-200">
+              <Bell className="h-6 w-6" />
             </div>
-            <div className="mt-4 text-base font-semibold">
-              Get Reminder
-            </div>
+            <div className="mt-4 text-base font-semibold">Get Reminder</div>
             <div className="mt-2 text-sm text-zinc-600">
               Never worry — get reminders and stay ahead.
             </div>
           </Link>
 
-          <Link
-            href="/dashboard"
-            className="group text-center"
-          >
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl group-hover:bg-zinc-200">
-              +
+          <Link href="/dashboard" className="group text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-xl transition group-hover:bg-zinc-200">
+              <BarChart3 className="h-6 w-6" />
             </div>
-            <div className="mt-4 text-base font-semibold">
-              Stay Informed
-            </div>
+            <div className="mt-4 text-base font-semibold">Stay Informed</div>
             <div className="mt-2 text-sm text-zinc-600">
               See renewals, amounts, and upcoming charges instantly.
             </div>

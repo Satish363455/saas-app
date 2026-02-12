@@ -1,49 +1,164 @@
 // app/account/AccountForm.tsx
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   email: string;
   initial: {
     full_name: string;
-    avatar_url: string;
+    avatar_url: string | null;
+    phone: string;
+    bio: string;
   };
 };
 
 export default function AccountForm({ email, initial }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const [fullName, setFullName] = useState(initial.full_name);
-  const [avatarUrl, setAvatarUrl] = useState(initial.avatar_url);
+  const [phone, setPhone] = useState(initial.phone);
+  const [bio, setBio] = useState(initial.bio);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initial.avatar_url);
 
-  async function save() {
-    setLoading(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const letter = (fullName?.[0] || email?.[0] || "S").toUpperCase();
+
+  async function saveProfile() {
+    setSaving(true);
     setSaved(null);
 
-    const res = await fetch("/api/account", {
+    const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ full_name: fullName, avatar_url: avatarUrl }),
+      body: JSON.stringify({
+        full_name: fullName,
+        phone,
+        bio,
+        avatar_url: avatarUrl,
+      }),
     });
 
-    setLoading(false);
+    setSaving(false);
     setSaved(res.ok ? "Saved!" : "Save failed");
   }
 
-  return (
-    <section className="rounded-2xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-      <h2 className="text-lg font-semibold">Profile</h2>
-      <p className="mt-1 text-sm text-black/60">Update your public details.</p>
+  async function onPickAvatar(file: File) {
+    setUploadError(null);
+    setUploading(true);
+    setSaved(null);
 
-      <div className="mt-6 space-y-4">
+    try {
+      const {
+        data: { user },
+        error: authErr,
+      } = await supabase.auth.getUser();
+
+      if (authErr || !user) throw new Error("Not authenticated");
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const filePath = `${user.id}/${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type,
+        });
+
+      if (upErr) throw upErr;
+
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const publicUrl = pub?.publicUrl;
+      if (!publicUrl) throw new Error("Could not get avatar URL");
+
+      // update UI immediately
+      setAvatarUrl(publicUrl);
+
+      // persist immediately
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ avatar_url: publicUrl }),
+      });
+
+      setSaved(res.ok ? "Photo uploaded!" : "Photo uploaded, but save failed");
+    } catch (e: any) {
+      setUploadError(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold">Profile</div>
+          <div className="text-xs text-black/55">Update your public details.</div>
+        </div>
+
+        <button
+          type="button"
+          onClick={saveProfile}
+          disabled={saving || uploading}
+          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+        >
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+      </div>
+
+      {/* Avatar */}
+      <div className="mt-5 flex items-center gap-4">
+        <div className="h-14 w-14 overflow-hidden rounded-full border border-black/10 bg-white">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+          ) : (
+            <div className="grid h-full w-full place-items-center text-sm font-semibold text-black/60">
+              {letter}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="inline-flex cursor-pointer items-center rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onPickAvatar(f);
+              }}
+            />
+            {uploading ? "Uploading..." : "Change photo"}
+          </label>
+
+          {uploadError ? (
+            <div className="text-xs text-red-600">{uploadError}</div>
+          ) : (
+            <div className="text-xs text-black/50">JPG/PNG recommended.</div>
+          )}
+        </div>
+      </div>
+
+      {/* Fields */}
+      <div className="mt-6 grid gap-4">
         <div>
           <label className="text-sm font-medium">Email (read-only)</label>
           <input
-            className="mt-2 w-full rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm"
+            className="mt-2 w-full rounded-xl border border-black/10 bg-zinc-50 px-3 py-2 text-sm"
             value={email}
-            disabled
+            readOnly
           />
         </div>
 
@@ -58,27 +173,28 @@ export default function AccountForm({ email, initial }: Props) {
         </div>
 
         <div>
-          <label className="text-sm font-medium">Avatar URL</label>
+          <label className="text-sm font-medium">Phone</label>
           <input
             className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="https://..."
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+1 555 555 5555"
           />
-          <p className="mt-2 text-xs text-black/55">Optional. You can paste an image URL.</p>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Bio</label>
+          <textarea
+            className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
+            rows={4}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tell us something about you"
+          />
         </div>
       </div>
 
-      <div className="mt-6 flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={loading}
-          className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
-        >
-          {loading ? "Saving..." : "Save changes"}
-        </button>
-        {saved ? <span className="text-sm text-black/70">{saved}</span> : null}
-      </div>
+      {saved ? <div className="mt-4 text-sm text-black/70">{saved}</div> : null}
     </section>
   );
 }

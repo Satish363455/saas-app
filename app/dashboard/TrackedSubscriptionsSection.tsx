@@ -125,41 +125,7 @@ export default function TrackedSubscriptionsSection({
 
   return (
     <div className="mt-4">
-      {/* ✅ Renewing Soon BOX (same style as dashboard cards) */}
-      {renewingSoon.length > 0 && (
-        <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur mb-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-black">Renewing Soon</h3>
-            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
-              Next 7 days
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {renewingSoon.map((s: any) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-xl border border-black/10 bg-white px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-semibold leading-tight truncate">
-                    {s.merchant_name ?? "Subscription"}
-                  </div>
-                  <div className="text-xs text-black/55">
-                    Renews {badgeText(s.daysLeft)}
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <div className="text-xs text-black/55">
-                    {formatDate(s.renewal_date)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      
 
       <TrackedSubscriptionList
         subs={subs}

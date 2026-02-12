@@ -93,6 +93,9 @@ export default async function DashboardPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
             <p className="mt-2 text-sm text-black/60">
+              Overview of your active subscriptions and upcoming renewals.
+            </p>
+            <p className="mt-1 text-xs text-black/50">
               Logged in as{" "}
               <span className="font-medium text-black/75">{user.email}</span>
             </p>
@@ -107,7 +110,7 @@ export default async function DashboardPage() {
             </Link>
 
             <a
-              href="#add-subscription"
+              href="hsla(180, 55%, 74%, 1.00)-subscription"
               className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
             >
               + Add Subscription

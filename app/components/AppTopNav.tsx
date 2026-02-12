@@ -13,15 +13,15 @@ export default function AppTopNav() {
           <span className="text-lg font-semibold">SubWise</span>
         </Link>
 
-        <nav className="flex items-center gap-6 text-sm">
-          <Link href="/dashboard" className="text-zinc-700 hover:text-zinc-900">
+        {/* ✅ bigger than before, still smaller than SubWise */}
+        <nav className="flex items-center gap-6 text-[15px] font-semibold">
+          <Link href="/dashboard" className="text-zinc-800 hover:text-zinc-950">
             Dashboard
           </Link>
-          <Link href="/settings" className="text-zinc-700 hover:text-zinc-900">
+          <Link href="/settings" className="text-zinc-800 hover:text-zinc-950">
             Settings
           </Link>
 
-          {/* ✅ Small circle avatar */}
           <UserNav />
         </nav>
       </div>

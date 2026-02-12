@@ -1,4 +1,3 @@
-// app/dashboard/TrackedSubscriptionList.tsx
 "use client";
 
 import React from "react";
@@ -40,15 +39,21 @@ export default function TrackedSubscriptionList({
         {subs.map((s: any) => {
           const id = String(s.id ?? "");
           const vendor = String(s.merchant_name ?? s.vendor ?? "Subscription");
-          const plan = String(s.plan_name ?? s.plan ?? "Subscription");
 
           const status = String(s.status ?? "active").toLowerCase();
           const isCancelled = status === "cancelled" || !!s.cancelled_at;
           const isBusy = busyId === id;
 
-          const daysLeft = daysUntil(s.renewal_date);
-          const renewsSoon =
-            !isCancelled && daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+          const { diffDays, isInvalidDate } = computeDayDiff(s.renewal_date);
+
+          let state: "cancelled" | "expired" | "renews_soon" | "active" | "invalid" =
+            "active";
+
+          if (isCancelled) state = "cancelled";
+          else if (isInvalidDate) state = "invalid";
+          else if (diffDays !== null && diffDays < 0) state = "expired";
+          else if (diffDays !== null && diffDays <= 7) state = "renews_soon";
+          else state = "active";
 
           const currency = String(s.currency ?? "USD");
           const amountText = formatAmount(s.amount);
@@ -61,57 +66,34 @@ export default function TrackedSubscriptionList({
               }`}
             >
               <div className="flex items-start justify-between gap-4">
-                {/* Left side */}
+                {/* Left */}
                 <div className="flex min-w-0 items-start gap-3">
                   <MerchantIcon name={vendor} size={40} className="shrink-0" />
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="truncate text-base font-semibold text-black">
-                        {vendor}
-                      </div>
-
-                      {/* Renews soon pill */}
-                      {renewsSoon && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-xs text-black/70">
-                          <span aria-hidden>⚠️</span> Renews soon
-                        </span>
-                      )}
+                    <div className="truncate text-base font-semibold text-black">
+                      {vendor}
                     </div>
 
                     <div className="mt-0.5 truncate text-sm text-black/55">
-                      {currency} {amountText} · Status:{" "}
-                      <span className="font-medium text-black/70">
-                        {isCancelled ? "cancelled" : "active"}
-                      </span>
+                      {currency} {amountText}
                     </div>
 
+                    {/* ✅ Only renewal date + relative days.
+                        NO "Renews soon" text here (only badge on the right). */}
                     <div className="mt-1 text-sm text-black/55">
                       Renews on{" "}
                       <span className="font-medium text-black/70">
                         {formatDate(s.renewal_date)}
                       </span>
-                      {daysLeft !== null && !isCancelled ? (
-                        <span className="text-black/50">
-                          {" "}
-                          ({daysLeft} day{daysLeft === 1 ? "" : "s"} left)
-                        </span>
-                      ) : null}
+                      {renderRelativeDays(diffDays, state)}
                     </div>
                   </div>
                 </div>
 
-                {/* Right side badges */}
-                <div className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2 py-1 text-xs ${
-                      isCancelled
-                        ? "border-black/10 bg-white text-black/55"
-                        : "border-black/10 bg-white text-black/70"
-                    }`}
-                  >
-                    {isCancelled ? "cancelled" : "active"}
-                  </span>
+                {/* ✅ Right badge: the ONLY place where "Renews soon" appears */}
+                <div className="flex shrink-0 items-start">
+                  <StatusBadge state={state} />
                 </div>
               </div>
 
@@ -149,7 +131,6 @@ export default function TrackedSubscriptionList({
                 </button>
               </div>
 
-              {/* small helper text */}
               <p className="mt-2 text-xs text-black/45">
                 Mark Cancelled does <span className="font-medium">not</span>{" "}
                 delete — it just stops reminders and marks it cancelled.
@@ -162,30 +143,112 @@ export default function TrackedSubscriptionList({
   );
 }
 
-/* Helpers */
+/* ---------- Badge ---------- */
 
-function daysUntil(dateInput: string | Date) {
+function StatusBadge({
+  state,
+}: {
+  state: "cancelled" | "expired" | "renews_soon" | "active" | "invalid";
+}) {
+  if (state === "cancelled") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/60">
+        <span className="h-2 w-2 rounded-full bg-zinc-400" />
+        Cancelled
+      </span>
+    );
+  }
+
+  if (state === "expired") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs text-red-700">
+        <span className="h-2 w-2 rounded-full bg-red-600" />
+        Expired
+      </span>
+    );
+  }
+
+  if (state === "renews_soon") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs text-amber-800">
+        <span aria-hidden>⚠️</span>
+        Renews soon
+      </span>
+    );
+  }
+
+  if (state === "invalid") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/60">
+        <span className="h-2 w-2 rounded-full bg-zinc-400" />
+        Invalid date
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+      <span className="h-2 w-2 rounded-full bg-emerald-600" />
+      Active
+    </span>
+  );
+}
+
+/* ---------- Helpers ---------- */
+
+function renderRelativeDays(diffDays: number | null, state: string) {
+  if (diffDays === null) return null;
+  if (state === "invalid") return null;
+
+  if (state === "expired") {
+    const daysAgo = Math.abs(diffDays);
+    return (
+      <span className="text-black/50">
+        {" "}
+        (expired {daysAgo} day{daysAgo === 1 ? "" : "s"} ago)
+      </span>
+    );
+  }
+
+  if (diffDays === 0) return <span className="text-black/50"> (today)</span>;
+
+  return (
+    <span className="text-black/50">
+      {" "}
+      ({diffDays} day{diffDays === 1 ? "" : "s"} left)
+    </span>
+  );
+}
+
+function computeDayDiff(dateInput: string | Date) {
   const today = new Date();
-  const target = new Date(dateInput);
-
-  if (Number.isNaN(target.getTime())) return null;
-
   today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
 
-  const diffMs = target.getTime() - today.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const target = new Date(dateInput);
+  if (Number.isNaN(target.getTime())) {
+    return { diffDays: null as number | null, isInvalidDate: true };
+  }
+
+  target.setHours(0, 0, 0, 0);
+  const msPerDay = 1000 * 60 * 60 * 24;
+
+  const diff = Math.floor((target.getTime() - today.getTime()) / msPerDay);
+  return { diffDays: diff, isInvalidDate: false };
 }
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return String(dateStr);
-  return d.toLocaleDateString();
+  if (Number.isNaN(d.getTime())) return String(dateStr ?? "");
+  return d.toLocaleDateString("en-US"); // ✅ MM/DD/YYYY
 }
 
 function formatAmount(amount: any) {
   if (typeof amount === "number") return amount.toFixed(2);
-  if (typeof amount === "string" && amount.trim() !== "" && !Number.isNaN(Number(amount))) {
+  if (
+    typeof amount === "string" &&
+    amount.trim() !== "" &&
+    !Number.isNaN(Number(amount))
+  ) {
     return Number(amount).toFixed(2);
   }
   return "—";

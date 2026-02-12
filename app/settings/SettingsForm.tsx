@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 type Props = {
   initial: {
@@ -10,37 +11,14 @@ type Props = {
     reminder_days: 1 | 3 | 7;
     preferred_currency: string;
     timezone: string;
-
-    full_name?: string;
-    phone?: string;
-    bio?: string;
-    avatar_url?: string | null;
-    email?: string;
   };
 };
 
 export default function SettingsForm({ initial }: Props) {
   const supabase = useMemo(() => createClient(), []);
 
-  // feedback
-  const [saved, setSaved] = useState<string | null>(null);
-
-  // ---------- profile ----------
-  const [profileSaving, setProfileSaving] = useState(false);
-
-  const [fullName, setFullName] = useState(initial.full_name ?? "");
-  const [phone, setPhone] = useState(initial.phone ?? "");
-  const [bio, setBio] = useState(initial.bio ?? "");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(
-    initial.avatar_url ?? null
-  );
-
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // ---------- reminders ----------
+  // reminder fields
   const [settingsSaving, setSettingsSaving] = useState(false);
-
   const [remindersEnabled, setRemindersEnabled] = useState(
     initial.reminders_enabled
   );
@@ -52,149 +30,93 @@ export default function SettingsForm({ initial }: Props) {
   );
   const [timezone, setTimezone] = useState(initial.timezone);
 
-  // ---------- password ----------
+  // password
   const [pwSaving, setPwSaving] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
-  // ---------- delete ----------
+  // delete
   const [deleting, setDeleting] = useState(false);
-
-  const avatarSrc = avatarUrl || "";
-  const letter = (fullName?.[0] || initial.email?.[0] || "S").toUpperCase();
-
-  async function saveProfile() {
-    setProfileSaving(true);
-    setSaved(null);
-
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        full_name: fullName,
-        phone,
-        bio,
-        avatar_url: avatarUrl,
-      }),
-    });
-
-    setProfileSaving(false);
-
-    const data = await res.json().catch(() => ({}));
-    setSaved(res.ok ? "Profile saved!" : data?.error ?? "Profile save failed");
-  }
 
   async function saveReminderSettings() {
     setSettingsSaving(true);
-    setSaved(null);
-
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        reminders_enabled: remindersEnabled,
-        reminder_days: reminderDays,
-        preferred_currency: preferredCurrency,
-        timezone,
-      }),
-    });
-
-    setSettingsSaving(false);
-
-    const data = await res.json().catch(() => ({}));
-    setSaved(res.ok ? "Settings saved!" : data?.error ?? "Settings save failed");
-  }
-
-  async function onPickAvatar(file: File) {
-    setUploadError(null);
-    setUploading(true);
-    setSaved(null);
 
     try {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !authData?.user) throw new Error("Not authenticated");
-
-      const userId = authData.user.id;
-
-      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-      const filePath = `${userId}/${Date.now()}.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: true,
-          contentType: file.type,
-        });
-
-      if (upErr) throw upErr;
-
-      const { data: pub } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(filePath);
-
-      const publicUrl = pub?.publicUrl;
-      if (!publicUrl) throw new Error("Could not get avatar URL");
-
-      // update UI immediately
-      setAvatarUrl(publicUrl);
-
-      // auto-save avatar immediately
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ avatar_url: publicUrl }),
+        body: JSON.stringify({
+          reminders_enabled: remindersEnabled,
+          reminder_days: reminderDays,
+          preferred_currency: preferredCurrency,
+          timezone,
+        }),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        setSaved("Photo uploaded, but profile save failed. Click Save Profile.");
-      } else {
-        setSaved("Photo uploaded!");
+        toast.error("Failed to save settings", {
+          description: data?.error ?? "Please try again.",
+        });
+        return;
       }
-    } catch (e: any) {
-      setUploadError(e?.message ?? "Upload failed");
+
+      toast.success("Settings saved");
     } finally {
-      setUploading(false);
+      setSettingsSaving(false);
     }
   }
 
   async function updatePassword() {
-    if (!newPassword || newPassword.length < 6) {
-      setSaved("Password must be at least 6 characters.");
+    const pwd = newPassword.trim();
+
+    if (pwd.length < 6) {
+      toast.error("Password too short", {
+        description: "Password must be at least 6 characters.",
+      });
       return;
     }
 
     setPwSaving(true);
-    setSaved(null);
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwd });
 
-    setPwSaving(false);
+      if (error) {
+        toast.error("Failed to update password", {
+          description: error.message,
+        });
+        return;
+      }
 
-    if (error) {
-      setSaved(error.message);
-      return;
+      setNewPassword("");
+      toast.success("Password updated");
+    } finally {
+      setPwSaving(false);
     }
-
-    setNewPassword("");
-    setSaved("Password updated!");
   }
 
   async function deleteAccount() {
-    if (!confirm("Delete your account permanently? This cannot be undone."))
-      return;
+    const ok = confirm(
+      "Delete your account permanently?\n\nThis will remove your profile and subscriptions. This cannot be undone."
+    );
+    if (!ok) return;
 
     setDeleting(true);
-    setSaved(null);
 
     try {
+      // you said you already created: /app/api/account/delete/route.ts
       const res = await fetch("/api/account/delete", { method: "POST" });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setSaved(data?.error ?? "Delete failed");
+        toast.error("Delete failed", {
+          description: data?.error ?? "Please try again.",
+        });
         return;
       }
 
+      toast.success("Account deleted");
       await supabase.auth.signOut();
       window.location.href = "/";
     } finally {
@@ -204,99 +126,6 @@ export default function SettingsForm({ initial }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* PROFILE */}
-      <section className="rounded-2xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Profile</h2>
-
-          <button
-            type="button"
-            onClick={saveProfile}
-            disabled={profileSaving || uploading}
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
-          >
-            {profileSaving ? "Saving..." : "Save Profile"}
-          </button>
-        </div>
-
-        <div className="mt-5 flex items-center gap-4">
-          {/* ✅ SMALL avatar like your 2nd screenshot */}
-          <div className="h-14 w-14 overflow-hidden rounded-full border border-black/10 bg-white">
-            {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarSrc}
-                alt="Avatar"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="grid h-full w-full place-items-center text-sm font-semibold text-black/50">
-                {letter}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                disabled={uploading}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onPickAvatar(f);
-                }}
-              />
-              {uploading ? "Uploading..." : "Upload photo"}
-            </label>
-
-            {uploadError ? (
-              <div className="text-xs text-red-600">{uploadError}</div>
-            ) : (
-              <div className="text-xs text-black/50">
-                JPG/PNG recommended. Storage policies must allow uploads.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium">Full name</label>
-            <input
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium">Phone</label>
-            <input
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 555 555 5555"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium">Bio</label>
-            <textarea
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              rows={4}
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell us something about you"
-            />
-          </div>
-        </div>
-
-        {saved ? <div className="mt-4 text-sm text-black/70">{saved}</div> : null}
-      </section>
-
       {/* REMINDER SETTINGS */}
       <section className="rounded-2xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
         <div className="flex items-center justify-between">
@@ -368,12 +197,12 @@ export default function SettingsForm({ initial }: Props) {
           </div>
         </div>
 
-        <div className="mt-6 flex items-center gap-3">
+        <div className="mt-6">
           <button
             type="button"
             onClick={saveReminderSettings}
             disabled={settingsSaving}
-            className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60 md:w-auto"
           >
             {settingsSaving ? "Saving..." : "Save Settings"}
           </button>
@@ -397,7 +226,7 @@ export default function SettingsForm({ initial }: Props) {
             type="button"
             onClick={updatePassword}
             disabled={pwSaving}
-            className="w-fit rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60"
+            className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60 md:w-fit"
           >
             {pwSaving ? "Updating..." : "Update Password"}
           </button>
@@ -415,7 +244,7 @@ export default function SettingsForm({ initial }: Props) {
           type="button"
           onClick={deleteAccount}
           disabled={deleting}
-          className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+          className="mt-4 w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 md:w-fit"
         >
           {deleting ? "Deleting..." : "Delete Account"}
         </button>

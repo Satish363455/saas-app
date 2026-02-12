@@ -1,3 +1,4 @@
+// app/components/UserNav.tsx
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,24 +24,26 @@ export default async function UserNav() {
     .maybeSingle();
 
   const name = profile?.full_name || user.email || "S";
-  const avatarUrl = profile?.avatar_url || "";
   const initial = (name ?? "S").charAt(0).toUpperCase();
 
+  // Small circular avatar that links to /account (NOT /settings)
   return (
     <Link
-      href="/settings"
-      className="flex items-center"
-      title="Profile"
-      aria-label="Profile"
+      href="/account"
+      className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-black/10 bg-white"
+      title="Account"
+      aria-label="Account"
     >
-      <div className="h-10 w-10 overflow-hidden rounded-full border border-black/10 bg-white grid place-items-center hover:bg-black/5">
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-sm font-semibold text-black/70">{initial}</span>
-        )}
-      </div>
+      {profile?.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={profile.avatar_url}
+          alt="Profile"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-sm font-semibold text-black/70">{initial}</span>
+      )}
     </Link>
   );
 }
