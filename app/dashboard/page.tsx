@@ -6,36 +6,31 @@ import { createClient } from "@/lib/supabase/server";
 import TrackedSubscriptionsSection from "./TrackedSubscriptionsSection";
 import type { TrackedSub } from "./types";
 import MerchantIcon from "@/app/components/MerchantIcon";
-import SendTestEmailButton from "./SendTestEmailButton";
 
 export const dynamic = "force-dynamic";
 
-function daysUntil(dateStr: string) {
-  const now = new Date();
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return null;
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+/* ---------------- Helpers ---------------- */
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
 }
 
-function Card({
-  title,
-  right,
-  children,
-}: {
-  title: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-black">{title}</h2>
-        {right}
-      </div>
-      {children}
-    </section>
-  );
+function safeDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
+
+function daysUntil(dateStr: string) {
+  const now = startOfDay(new Date());
+  const d = safeDate(dateStr);
+  if (!d) return null;
+  const sd = startOfDay(d);
+  return Math.ceil((sd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/* ---------------- Page ---------------- */
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -68,22 +63,95 @@ export default async function DashboardPage() {
 
   const trackedSubs = (tracked ?? []) as TrackedSub[];
 
-  // Upcoming renewals (next 7 days)
-  const now = new Date();
-  const in7 = new Date();
-  in7.setDate(now.getDate() + 7);
-
-  const upcoming = trackedSubs
-    .filter((s) => {
-      const d = new Date(String((s as any).renewal_date));
-      return !Number.isNaN(d.getTime()) && d >= now && d <= in7;
-    })
-    .slice(0, 6);
-
   const reminderDays = profile?.reminder_days ?? 3;
   const preferredCurrency = profile?.preferred_currency ?? "USD";
-  const timezone = profile?.timezone ?? "UTC";
-  const remindersEnabled = !!profile?.reminders_enabled;
+
+  // Dates
+  const today = startOfDay(new Date());
+  const in7 = startOfDay(new Date());
+  in7.setDate(in7.getDate() + 7);
+
+  const in30 = startOfDay(new Date());
+  in30.setDate(in30.getDate() + 30);
+
+  // Total subs (includes expired/cancelled/etc)
+  const totalSubs = trackedSubs.length;
+
+  // Active-ish filter (exclude cancelled)
+  const activeLike = trackedSubs.filter((s: any) => {
+    const status = String(s.status ?? "active").toLowerCase();
+    const cancelled = status === "cancelled" || !!s.cancelled_at;
+    return !cancelled;
+  });
+
+  // Upcoming Renewals (next 7 days, not expired, not cancelled)
+  const upcoming = activeLike
+    .filter((s: any) => {
+      const d = safeDate(String(s.renewal_date));
+      if (!d) return false;
+      const sd = startOfDay(d);
+      return sd >= today && sd <= in7;
+    })
+    .sort((a: any, b: any) =>
+      String(a.renewal_date).localeCompare(String(b.renewal_date))
+    )
+    .slice(0, 6);
+
+  // Next upcoming renewal (not expired, not cancelled)
+  const nextUpcoming = activeLike
+    .filter((s: any) => {
+      const d = safeDate(String(s.renewal_date));
+      if (!d) return false;
+      return startOfDay(d) >= today;
+    })
+    .sort((a: any, b: any) =>
+      String(a.renewal_date).localeCompare(String(b.renewal_date))
+    )[0];
+
+  // Payment Forecast (next 30 days)
+  const forecastItems = activeLike
+    .filter((s: any) => {
+      const d = safeDate(String(s.renewal_date));
+      if (!d) return false;
+      const sd = startOfDay(d);
+      return sd >= today && sd <= in30;
+    })
+    .sort((a: any, b: any) =>
+      String(a.renewal_date).localeCompare(String(b.renewal_date))
+    );
+
+  const expectedTotal = forecastItems.reduce((sum: number, s: any) => {
+    const n = typeof s.amount === "number" ? s.amount : Number(s.amount);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
+
+  // Monthly spend (normalized)
+  const monthlySpend = activeLike.reduce((sum: number, s: any) => {
+    const amt = typeof s.amount === "number" ? s.amount : Number(s.amount);
+    const n = Number.isFinite(amt) ? amt : 0;
+
+    const bc = String(s.billing_cycle ?? "monthly").toLowerCase();
+    if (bc === "weekly") return sum + n * (52 / 12);
+    if (bc === "every_2_weeks" || bc === "2_weeks") return sum + n * (26 / 12);
+    if (bc === "every_3_months" || bc === "3_months") return sum + n / 3;
+    if (bc === "every_6_months" || bc === "6_months") return sum + n / 6;
+    if (bc === "yearly") return sum + n / 12;
+    return sum + n; // monthly
+  }, 0);
+
+  // Yearly spend (normalized)
+  const yearlySpend = activeLike.reduce((sum: number, s: any) => {
+    const amt = typeof s.amount === "number" ? s.amount : Number(s.amount);
+    const n = Number.isFinite(amt) ? amt : 0;
+
+    const bc = String(s.billing_cycle ?? "monthly").toLowerCase();
+    if (bc === "weekly") return sum + n * 52;
+    if (bc === "every_2_weeks" || bc === "2_weeks") return sum + n * 26;
+    if (bc === "every_3_months" || bc === "3_months") return sum + n * 4;
+    if (bc === "every_6_months" || bc === "6_months") return sum + n * 2;
+    if (bc === "yearly") return sum + n;
+    return sum + n * 12;
+  }, 0);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -93,7 +161,7 @@ export default async function DashboardPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
             <p className="mt-2 text-sm text-black/60">
-              Overview of your active subscriptions and upcoming renewals.
+              Overview of your subscriptions and upcoming renewals.
             </p>
             <p className="mt-1 text-xs text-black/50">
               Logged in as{" "}
@@ -110,7 +178,7 @@ export default async function DashboardPage() {
             </Link>
 
             <a
-              href="hsla(180, 55%, 74%, 1.00)-subscription"
+              href="#add-subscription"
               className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
             >
               + Add Subscription
@@ -118,182 +186,226 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Main grid */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* LEFT: Upcoming Renewals */}
-          <section className="lg:col-span-2 rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-black">
-                Upcoming Renewals
-              </h2>
-              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
-                Next 7 days
-              </span>
+        {/* Summary cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <div className="text-sm font-semibold text-black/70">
+              Total subscriptions
             </div>
-
-            <div className="mt-5 space-y-3">
-              {upcoming.length === 0 ? (
-                <p className="text-sm text-black/60">
-                  No renewals in the next 7 days.
-                </p>
-              ) : (
-                upcoming.map((s) => {
-                  const vendor = String(
-                    (s as any).merchant_name ??
-                      (s as any).vendor ??
-                      "Subscription"
-                  );
-
-                  const diffDays = daysUntil(String((s as any).renewal_date));
-                  const badge =
-                    diffDays === null
-                      ? "—"
-                      : diffDays <= 0
-                      ? "Today"
-                      : diffDays === 1
-                      ? "In 1 day"
-                      : `In ${diffDays} days`;
-
-                  const currency = String(
-                    (s as any).currency ?? preferredCurrency ?? "USD"
-                  );
-
-                  const amount =
-                    typeof (s as any).amount === "number"
-                      ? (s as any).amount.toFixed(2)
-                      : (s as any).amount ?? "—";
-
-                  return (
-                    <div
-                      key={(s as any).id}
-                      className="flex items-center justify-between rounded-xl border border-black/10 bg-white px-4 py-3"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <MerchantIcon
-                          name={vendor}
-                          size={40}
-                          className="shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <div className="font-semibold leading-tight truncate">
-                            {vendor}
-                          </div>
-                          <div className="text-xs text-black/55 truncate">
-                            {(s as any).plan ??
-                              (s as any).plan_name ??
-                              "Subscription"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-black">
-                            {currency} {amount}
-                          </div>
-                          <div className="text-xs text-black/55">
-                            {new Date(
-                              String((s as any).renewal_date)
-                            ).toLocaleDateString()}
-                          </div>
-                        </div>
-
-                        <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
-                          {badge}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+            <div className="mt-2 text-3xl font-semibold text-black">
+              {totalSubs}
             </div>
           </section>
 
-          {/* RIGHT COLUMN */}
-          <div className="space-y-6">
-            {/* Reminder Settings Summary */}
-            <Card title="Reminder Settings">
-              <div className="space-y-2 text-sm text-black/70">
-                <div className="flex items-center justify-between">
-                  <span>Email reminders</span>
-                  <span className="font-semibold text-black">
-                    {remindersEnabled ? "On" : "Off"}
-                  </span>
-                </div>
+          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <div className="text-sm font-semibold text-black/70">Monthly spend</div>
+            <div className="mt-2 text-3xl font-semibold text-black">
+              {preferredCurrency} {monthlySpend.toFixed(2)}
+            </div>
+          </section>
 
-                <div className="flex items-center justify-between">
-                  <span>Reminder window</span>
-                  <span className="font-semibold text-black">
-                    {reminderDays} days
-                  </span>
-                </div>
+          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <div className="text-sm font-semibold text-black/70">Yearly spend</div>
+            <div className="mt-2 text-3xl font-semibold text-black">
+              {preferredCurrency} {yearlySpend.toFixed(2)}
+            </div>
+          </section>
 
-                <div className="flex items-center justify-between">
-                  <span>Timezone</span>
-                  <span className="font-semibold text-black">{timezone}</span>
-                </div>
+          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <div className="text-sm font-semibold text-black/70">Next renewal</div>
+            <div className="mt-2 text-3xl font-semibold text-black">
+              {nextUpcoming?.renewal_date
+                ? new Date(String((nextUpcoming as any).renewal_date)).toLocaleDateString(
+                    "en-US"
+                  )
+                : "—"}
+            </div>
+          </section>
+        </div>
 
-                <div className="flex items-center justify-between">
-                  <span>Currency</span>
-                  <span className="font-semibold text-black">
-                    {preferredCurrency}
-                  </span>
+        {/* FULL WIDTH Upcoming + Forecast */}
+        <div className="space-y-6">
+        {/* Upcoming Renewals */}
+<section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+  {/* Accent */}
+  <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-emerald-500/70" />
+
+  <div className="flex items-start justify-between gap-3">
+    <div>
+      <h2 className="text-sm font-semibold text-black flex items-center gap-2">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-700">
+          ⏳
+        </span>
+        Upcoming Renewals
+      </h2>
+      <p className="mt-1 text-xs text-black/50">
+        What’s renewing soon — sorted by closest date
+      </p>
+    </div>
+
+    <span className="shrink-0 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
+      Next 7 days
+    </span>
+  </div>
+
+  <div className="mt-5 space-y-3 max-h-[360px] overflow-auto pr-1">
+    {upcoming.length === 0 ? (
+      <p className="text-sm text-black/60">No renewals in the next 7 days.</p>
+    ) : (
+      upcoming.map((s: any) => {
+        const vendor = String(s.merchant_name ?? s.vendor ?? "Subscription");
+
+        const diffDays = daysUntil(String(s.renewal_date));
+        const badgeText =
+          diffDays === null
+            ? "—"
+            : diffDays <= 0
+            ? "Today"
+            : diffDays === 1
+            ? "Tomorrow"
+            : `In ${diffDays} days`;
+
+        const badgeClass =
+          diffDays !== null && diffDays <= 1
+            ? "bg-rose-50 text-rose-700 border-rose-200"
+            : diffDays !== null && diffDays <= 3
+            ? "bg-amber-50 text-amber-700 border-amber-200"
+            : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+        const currency = String(s.currency ?? preferredCurrency ?? "USD");
+        const amount =
+          typeof s.amount === "number" ? s.amount.toFixed(2) : s.amount ?? "—";
+
+        // mini progress: 0 days => full, 7 days => small
+        const pct =
+          diffDays === null ? 0 : Math.max(0, Math.min(100, (1 - diffDays / 7) * 100));
+
+        return (
+          <div
+            key={String(s.id)}
+            className="group rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <MerchantIcon name={vendor} size={42} className="shrink-0" />
+
+                <div className="min-w-0">
+                  <div className="font-semibold leading-tight truncate">
+                    {vendor}
+                  </div>
+                  <div className="text-xs text-black/55 truncate">
+                    {s.plan ?? s.plan_name ?? "Subscription"} •{" "}
+                    {new Date(String(s.renewal_date)).toLocaleDateString("en-US")}
+                  </div>
                 </div>
               </div>
 
-              <Link
-                href="/settings"
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5"
-              >
-                Edit settings
-              </Link>
-            </Card>
-
-            {/* Email Delivery */}
-            <Card title="Email Delivery">
-              <div className="flex items-start gap-2">
-                <div
-                  className={`mt-1 h-4 w-4 rounded-full ${
-                    remindersEnabled ? "bg-emerald-500" : "bg-zinc-300"
-                  }`}
-                />
-                <div>
-                  <div className="text-sm font-semibold text-black">
-                    {remindersEnabled
-                      ? "Authenticated reminders"
-                      : "Reminders disabled"}
-                  </div>
-                  <div className="text-xs text-black/55">
-                    {remindersEnabled
-                      ? "Send a test reminder email (stays on this page)."
-                      : "Enable reminders in Settings to send emails."}
-                  </div>
+              <div className="shrink-0 text-right">
+                <div className="text-sm font-semibold text-black">
+                  {currency} {amount}
                 </div>
+                <span
+                  className={`mt-1 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass}`}
+                >
+                  {badgeText}
+                </span>
               </div>
+            </div>
 
-              {/* ✅ No navigation, no JSON page */}
-              <SendTestEmailButton disabled={!remindersEnabled} />
-
-              <p className="mt-2 text-xs text-black/45">
-                Tip: In production, use Vercel Cron (Authorization header) instead
-                of query secret.
-              </p>
-            </Card>
-
-            {/* Account */}
-            <Card title="Account">
-              <p className="text-sm text-black/60">
-                Update your profile details.
-              </p>
-
-              <Link
-                href="/account"
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5"
-              >
-                View account
-              </Link>
-            </Card>
+            {/* mini progress bar */}
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
+              <div
+                className="h-full rounded-full bg-emerald-500/70 transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
           </div>
+        );
+      })
+    )}
+  </div>
+</section>
+
+          {/* Payment Forecast */}
+          {/* Payment Forecast */}
+<section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+  {/* Accent */}
+  <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-indigo-500/70" />
+
+  <div className="flex items-start justify-between gap-3">
+    <div>
+      <h2 className="text-sm font-semibold text-black flex items-center gap-2">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-700">
+          📈
+        </span>
+        Payment Forecast
+      </h2>
+      <p className="mt-1 text-xs text-black/50">
+        Expected charges coming up — next 30 days
+      </p>
+    </div>
+
+    <span className="shrink-0 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
+      Next 30 days
+    </span>
+  </div>
+
+  <div className="mt-5 rounded-2xl border border-black/10 bg-white px-4 py-3">
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-black/60">Expected total</span>
+      <span className="text-base font-semibold text-black">
+        {preferredCurrency} {expectedTotal.toFixed(2)}
+      </span>
+    </div>
+  </div>
+
+  <div className="mt-4 space-y-3 max-h-[420px] overflow-auto pr-1">
+    {forecastItems.length === 0 ? (
+      <p className="text-sm text-black/60">No payments due in the next 30 days.</p>
+    ) : (
+      forecastItems.slice(0, 10).map((s: any) => {
+        const vendor = String(s.merchant_name ?? "Subscription");
+        const currency = String(s.currency ?? preferredCurrency ?? "USD");
+        const amount =
+          typeof s.amount === "number" ? s.amount.toFixed(2) : s.amount ?? "—";
+
+        const diffDays = daysUntil(String(s.renewal_date));
+        const due =
+          diffDays === null
+            ? "—"
+            : diffDays <= 0
+            ? "Due today"
+            : diffDays === 1
+            ? "Due tomorrow"
+            : `Due in ${diffDays} days`;
+
+        return (
+          <div
+            key={String(s.id)}
+            className="flex items-center justify-between gap-4 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:shadow-md"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <MerchantIcon name={vendor} size={42} className="shrink-0" />
+              <div className="min-w-0">
+                <div className="font-semibold leading-tight truncate">{vendor}</div>
+                <div className="text-xs text-black/55 truncate">
+                  {new Date(String(s.renewal_date)).toLocaleDateString("en-US")} •{" "}
+                  {due}
+                </div>
+              </div>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <div className="text-sm font-semibold text-black">
+                {currency} {amount}
+              </div>
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</section>
         </div>
 
         {/* Tracked subscriptions + Add subscription section */}

@@ -1,254 +1,284 @@
-// app/settings/SettingsForm.tsx
 "use client";
 
-import { useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { useState } from "react";
+import Link from "next/link";
 
-type Props = {
-  initial: {
-    reminders_enabled: boolean;
-    reminder_days: 1 | 3 | 7;
-    preferred_currency: string;
-    timezone: string;
-  };
+type ProfileState = {
+  full_name: string;
+  avatar_url: string;
+  reminders_enabled: boolean;
+  reminder_days: number;
+  preferred_currency: string;
+  timezone: string;
 };
 
-export default function SettingsForm({ initial }: Props) {
-  const supabase = useMemo(() => createClient(), []);
+export default function SettingsForm({
+  userEmail,
+  initialProfile,
+}: {
+  userEmail: string;
+  initialProfile: ProfileState;
+}) {
+  const [tab, setTab] = useState<
+    "Notifications" | "Appearance" | "Reminder Settings" | "Account"
+  >("Notifications");
 
-  // reminder fields
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [remindersEnabled, setRemindersEnabled] = useState(
-    initial.reminders_enabled
-  );
-  const [reminderDays, setReminderDays] = useState<1 | 3 | 7>(
-    initial.reminder_days
-  );
-  const [preferredCurrency, setPreferredCurrency] = useState(
-    initial.preferred_currency
-  );
-  const [timezone, setTimezone] = useState(initial.timezone);
+  const [p, setP] = useState<ProfileState>({
+    full_name: initialProfile?.full_name ?? "",
+    avatar_url: initialProfile?.avatar_url ?? "",
+    reminders_enabled: initialProfile?.reminders_enabled ?? true,
+    reminder_days: initialProfile?.reminder_days ?? 3,
+    preferred_currency: initialProfile?.preferred_currency ?? "USD",
+    timezone: initialProfile?.timezone ?? "UTC",
+  });
 
-  // password
-  const [pwSaving, setPwSaving] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
 
-  // delete
-  const [deleting, setDeleting] = useState(false);
-
-  async function saveReminderSettings() {
-    setSettingsSaving(true);
-
+  async function saveSettings() {
+    setSaving(true);
+    setMsg("");
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          reminders_enabled: remindersEnabled,
-          reminder_days: reminderDays,
-          preferred_currency: preferredCurrency,
-          timezone,
+          reminders_enabled: p.reminders_enabled,
+          reminder_days: p.reminder_days,
+          preferred_currency: p.preferred_currency,
+          timezone: p.timezone,
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error("Failed to save settings");
 
-      if (!res.ok) {
-        toast.error("Failed to save settings", {
-          description: data?.error ?? "Please try again.",
-        });
-        return;
-      }
-
-      toast.success("Settings saved");
+      setMsg("Settings saved");
+    } catch (err) {
+      setMsg("Error saving settings");
     } finally {
-      setSettingsSaving(false);
+      setSaving(false);
+      setTimeout(() => setMsg(""), 2500);
     }
   }
 
-  async function updatePassword() {
-    const pwd = newPassword.trim();
-
-    if (pwd.length < 6) {
-      toast.error("Password too short", {
-        description: "Password must be at least 6 characters.",
+  async function saveAccount() {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/account", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          full_name: p.full_name,
+          avatar_url: p.avatar_url,
+        }),
       });
-      return;
-    }
 
-    setPwSaving(true);
+      if (!res.ok) throw new Error("Failed to save account");
 
-    try {
-      const { error } = await supabase.auth.updateUser({ password: pwd });
-
-      if (error) {
-        toast.error("Failed to update password", {
-          description: error.message,
-        });
-        return;
-      }
-
-      setNewPassword("");
-      toast.success("Password updated");
+      setMsg("Account updated");
+    } catch (err) {
+      setMsg("Error saving account");
     } finally {
-      setPwSaving(false);
-    }
-  }
-
-  async function deleteAccount() {
-    const ok = confirm(
-      "Delete your account permanently?\n\nThis will remove your profile and subscriptions. This cannot be undone."
-    );
-    if (!ok) return;
-
-    setDeleting(true);
-
-    try {
-      // you said you already created: /app/api/account/delete/route.ts
-      const res = await fetch("/api/account/delete", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        toast.error("Delete failed", {
-          description: data?.error ?? "Please try again.",
-        });
-        return;
-      }
-
-      toast.success("Account deleted");
-      await supabase.auth.signOut();
-      window.location.href = "/";
-    } finally {
-      setDeleting(false);
+      setSaving(false);
+      setTimeout(() => setMsg(""), 2500);
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* REMINDER SETTINGS */}
-      <section className="rounded-2xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Reminder Settings</h2>
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-black/60">
+          Logged in as <span className="font-medium text-black">{userEmail}</span>
+        </div>
 
-          <label className="inline-flex items-center gap-2 text-sm">
-            <span className="text-black/70">Enable email reminders</span>
+        <Link
+          href="/dashboard"
+          className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 rounded-xl bg-black/5 p-2">
+        {["Notifications", "Appearance", "Reminder Settings", "Account"].map(
+          (t) => (
             <button
-              type="button"
-              onClick={() => setRemindersEnabled((v) => !v)}
-              className={`h-6 w-11 rounded-full border border-black/10 p-0.5 transition ${
-                remindersEnabled ? "bg-emerald-600" : "bg-black/10"
+              key={t}
+              onClick={() => setTab(t as any)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                tab === t
+                  ? "bg-white shadow-sm"
+                  : "text-black/60 hover:bg-white/60"
               }`}
-              aria-pressed={remindersEnabled}
+              type="button"
+            >
+              {t}
+            </button>
+          )
+        )}
+      </div>
+
+      {msg && <div className="text-sm text-emerald-700">{msg}</div>}
+
+      {/* ===================== NOTIFICATIONS ===================== */}
+      {tab === "Notifications" && (
+        <section className="rounded-2xl border border-black/10 bg-white p-6">
+          <h2 className="text-lg font-semibold">Email Notifications</h2>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold">Email reminders</div>
+              <div className="text-sm text-black/55">
+                Get notified before subscription renewals
+              </div>
+            </div>
+
+            <button
+              onClick={() =>
+                setP({ ...p, reminders_enabled: !p.reminders_enabled })
+              }
+              className={`h-6 w-11 rounded-full ${
+                p.reminders_enabled ? "bg-emerald-600" : "bg-black/20"
+              }`}
+              type="button"
             >
               <span
-                className={`block h-5 w-5 rounded-full bg-white shadow transition ${
-                  remindersEnabled ? "translate-x-5" : "translate-x-0"
+                className={`inline-block h-5 w-5 rounded-full bg-white transition ${
+                  p.reminders_enabled ? "translate-x-5" : "translate-x-1"
                 }`}
               />
             </button>
-          </label>
-        </div>
+          </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="text-sm font-medium">
+          <button
+            onClick={saveSettings}
+            disabled={saving}
+            className="mt-6 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Save Settings
+          </button>
+        </section>
+      )}
+
+      {/* ===================== APPEARANCE ===================== */}
+      {tab === "Appearance" && (
+        <section className="rounded-2xl border border-black/10 bg-white p-6">
+          <h2 className="text-lg font-semibold">Display & Formatting</h2>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="text-sm font-semibold">
+                Preferred currency
+              </label>
+              <select
+                value={p.preferred_currency}
+                onChange={(e) =>
+                  setP({ ...p, preferred_currency: e.target.value })
+                }
+                className="mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              >
+                {["USD", "EUR", "INR", "GBP"].map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Timezone</label>
+              <input
+                value={p.timezone}
+                onChange={(e) => setP({ ...p, timezone: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={saveSettings}
+            disabled={saving}
+            className="mt-6 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Save Settings
+          </button>
+        </section>
+      )}
+
+      {/* ===================== REMINDER SETTINGS ===================== */}
+      {tab === "Reminder Settings" && (
+        <section className="rounded-2xl border border-black/10 bg-white p-6">
+          <h2 className="text-lg font-semibold">Reminder Window</h2>
+
+          <div className="mt-4">
+            <label className="text-sm font-semibold">
               Reminder days before renewal
             </label>
+
             <select
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              value={reminderDays}
+              value={p.reminder_days}
               onChange={(e) =>
-                setReminderDays(Number(e.target.value) as 1 | 3 | 7)
+                setP({ ...p, reminder_days: Number(e.target.value) })
               }
+              className="mt-2 w-48 rounded-xl border border-black/10 px-3 py-2 text-sm"
             >
-              <option value={1}>1 day</option>
-              <option value={3}>3 days</option>
-              <option value={7}>7 days</option>
+              {[1, 3, 5, 7].map((n) => (
+                <option key={n} value={n}>
+                  {n} day{n > 1 ? "s" : ""}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Preferred currency</label>
-            <select
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              value={preferredCurrency}
-              onChange={(e) => setPreferredCurrency(e.target.value)}
-            >
-              <option value="USD">USD</option>
-              <option value="INR">INR</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
-            <p className="mt-2 text-xs text-black/55">
-              Used for display defaults (you can still set currency per
-              subscription).
-            </p>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium">Timezone</label>
-            <input
-              className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              placeholder="Example: UTC, Asia/Kolkata, America/New_York"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6">
           <button
-            type="button"
-            onClick={saveReminderSettings}
-            disabled={settingsSaving}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60 md:w-auto"
+            onClick={saveSettings}
+            disabled={saving}
+            className="mt-6 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
           >
-            {settingsSaving ? "Saving..." : "Save Settings"}
+            Save Settings
           </button>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* CHANGE PASSWORD */}
-      <section className="rounded-2xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-        <h2 className="text-lg font-semibold">Change Password</h2>
-
-        <div className="mt-4 grid gap-3">
-          <input
-            type="password"
-            className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
-            placeholder="New password (min 6 chars)"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-
-          <button
-            type="button"
-            onClick={updatePassword}
-            disabled={pwSaving}
-            className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:opacity-60 md:w-fit"
-          >
-            {pwSaving ? "Updating..." : "Update Password"}
-          </button>
-        </div>
-      </section>
-
-      {/* DELETE ACCOUNT */}
-      <section className="rounded-2xl border border-red-200 bg-red-50/60 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-red-700">Delete Account</h2>
-        <p className="mt-2 text-sm text-red-700/80">
-          This action is permanent and cannot be undone.
-        </p>
-
-        <button
-          type="button"
-          onClick={deleteAccount}
-          disabled={deleting}
-          className="mt-4 w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 md:w-fit"
+      {/* ===================== ACCOUNT ===================== */}
+      {/* We show account inline (no navigation) so user stays on settings page */}
+      {tab === "Account" && (
+        <section
+          id="account-section"
+          className="rounded-2xl border border-black/10 bg-white p-6"
         >
-          {deleting ? "Deleting..." : "Delete Account"}
-        </button>
-      </section>
+          <h2 className="text-lg font-semibold">Account Details</h2>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="text-sm font-semibold">Full name</label>
+              <input
+                value={p.full_name}
+                onChange={(e) => setP({ ...p, full_name: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Avatar URL</label>
+              <input
+                value={p.avatar_url}
+                onChange={(e) => setP({ ...p, avatar_url: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={saveAccount}
+            disabled={saving}
+            className="mt-6 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Save Account
+          </button>
+        </section>
+      )}
     </div>
   );
 }
