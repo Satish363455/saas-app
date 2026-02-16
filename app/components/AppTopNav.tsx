@@ -1,8 +1,9 @@
 // app/components/AppTopNav.tsx
 import Link from "next/link";
 import UserNav from "./UserNav";
+import RenewalBell from "./RenewalBell";
 
-export default function AppTopNav() {
+export default function AppTopNav({ user }: { user: any }) {
   return (
     <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -13,16 +14,20 @@ export default function AppTopNav() {
           <span className="text-lg font-semibold">SubWise</span>
         </Link>
 
-        {/* ✅ bigger than before, still smaller than SubWise */}
         <nav className="flex items-center gap-6 text-[15px] font-semibold">
           <Link href="/dashboard" className="text-zinc-800 hover:text-zinc-950">
             Dashboard
           </Link>
+
           <Link href="/settings" className="text-zinc-800 hover:text-zinc-950">
             Settings
           </Link>
 
-          <UserNav />
+          {/* 🔔 stays client so it can fetch count */}
+          <RenewalBell />
+
+          {/* ✅ user comes from server now (reliable) */}
+          <UserNav user={user} />
         </nav>
       </div>
     </header>

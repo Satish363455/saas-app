@@ -3,6 +3,9 @@
 import React from "react";
 import type { TrackedSub } from "./types";
 import MerchantIcon from "@/app/components/MerchantIcon";
+import { smartRenewal } from "@/lib/subscriptions/smartRenewal";
+import { effectiveNextRenewal } from "../../lib/subscriptions/effectiveNextRenewal";
+
 
 type Props = {
   subs: TrackedSub[];
@@ -44,7 +47,13 @@ export default function TrackedSubscriptionList({
           const isCancelled = status === "cancelled" || !!s.cancelled_at;
           const isBusy = busyId === id;
 
-          const { diffDays, isInvalidDate } = computeDayDiff(s.renewal_date);
+          const nextRenewal = effectiveNextRenewal({
+            renewalDate: s.renewal_date,
+            billingCycle: s.billing_cycle,
+            cancelled: isCancelled,
+          });
+
+          const { diffDays, isInvalidDate } = computeDayDiff(nextRenewal);
 
           let state: "cancelled" | "expired" | "renews_soon" | "active" | "invalid" =
             "active";
@@ -84,7 +93,7 @@ export default function TrackedSubscriptionList({
                     <div className="mt-1 text-sm text-black/55">
                       Renews on{" "}
                       <span className="font-medium text-black/70">
-                        {formatDate(s.renewal_date)}
+                         {formatDate(nextRenewal)}
                       </span>
                       {renderRelativeDays(diffDays, state)}
                     </div>

@@ -3,29 +3,32 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "sonner";
 import AppTopNav from "@/app/components/AppTopNav";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "SubWise",
   description: "Track subscriptions and get renewal reminders.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <html lang="en">
-      <body className="min-h-screen bg-white text-zinc-900">
+      <body className="min-h-screen text-zinc-900">
         {/* Top Navigation */}
-        <AppTopNav />
+        <AppTopNav user={user} />
 
         {/* Page Content */}
-        <main className="mx-auto max-w-6xl px-6 py-10">
-          {children}
-        </main>
+        <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
 
-        {/* Toast notifications */}
         <Toaster richColors />
       </body>
     </html>
