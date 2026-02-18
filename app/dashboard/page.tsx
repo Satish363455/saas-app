@@ -1,7 +1,6 @@
 // app/dashboard/page.tsx
 import React from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import TrackedSubscriptionsSection from "./TrackedSubscriptionsSection";
 import type { TrackedSub } from "./types";
@@ -19,15 +18,17 @@ function startOfDay(d: Date) {
   return x;
 }
 
-function safeDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
 function daysUntilDate(d: Date) {
   const now = startOfDay(new Date());
   const sd = startOfDay(d);
   return Math.ceil((sd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Parse YYYY-MM-DD as *local* date (prevents timezone -1 day bug)
+function parseDateOnlyLocal(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
 }
 
 function getEffectiveRenewalDate(s: any) {
@@ -38,7 +39,15 @@ function getEffectiveRenewalDate(s: any) {
       String(s.status ?? "").toLowerCase() === "cancelled" || !!s.cancelled_at,
   });
 
-  return next ? startOfDay(new Date(next)) : null;
+  if (!next) return null;
+
+  // If engine returns YYYY-MM-DD, parse as LOCAL date
+  if (typeof next === "string" && /^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    const d = parseDateOnlyLocal(next);
+    return d ? startOfDay(d) : null;
+  }
+
+  return startOfDay(new Date(next));
 }
 
 function formatDate(d: Date | null) {
@@ -78,7 +87,6 @@ export default async function DashboardPage() {
     .order("renewal_date", { ascending: true });
 
   const trackedSubs = (tracked ?? []) as TrackedSub[];
-
   const preferredCurrency = profile?.preferred_currency ?? "USD";
 
   // Dates
@@ -89,7 +97,7 @@ export default async function DashboardPage() {
   const in30 = startOfDay(new Date());
   in30.setDate(in30.getDate() + 30);
 
-  // Total subs (includes expired/cancelled/etc)
+  // Total subs
   const totalSubs = trackedSubs.length;
 
   // Cancelled count
@@ -105,15 +113,15 @@ export default async function DashboardPage() {
     return !cancelled;
   });
 
-  // ✅ Build effective renewal dates ONCE (smart engine)
+  // Build effective renewal date ONCE for everything
   const withEffective = activeLike
-    .map((s: any) => {
-      const eff = getEffectiveRenewalDate(s);
-      return { ...s, effective_renewal_date: eff };
-    })
-    .filter((s: any) => !!s.effective_renewal_date); // drop invalid dates
+    .map((s: any) => ({
+      ...s,
+      effective_renewal_date: getEffectiveRenewalDate(s),
+    }))
+    .filter((s: any) => !!s.effective_renewal_date);
 
-  // ✅ Expired / Renews soon / Active counts using effective date
+  // Counts using effective date
   const expiredCount = withEffective.filter((s: any) => {
     const d = s.effective_renewal_date as Date;
     return d < today;
@@ -129,7 +137,7 @@ export default async function DashboardPage() {
     return d >= today;
   }).length;
 
-  // ✅ Upcoming Renewals (next 7 days) using effective date
+  // Upcoming (next 7 days) using effective date
   const upcoming = withEffective
     .filter((s: any) => {
       const d = s.effective_renewal_date as Date;
@@ -142,19 +150,16 @@ export default async function DashboardPage() {
     )
     .slice(0, 6);
 
-  // ✅ Next renewal using effective date
+  // Next renewal using effective date
   const nextUpcoming = withEffective
-    .filter((s: any) => {
-      const d = s.effective_renewal_date as Date;
-      return d >= today;
-    })
+    .filter((s: any) => (s.effective_renewal_date as Date) >= today)
     .sort(
       (a: any, b: any) =>
         (a.effective_renewal_date as Date).getTime() -
         (b.effective_renewal_date as Date).getTime()
     )[0];
 
-  // ✅ Payment Forecast (next 30 days) using effective date
+  // Forecast (next 30 days) using effective date
   const forecastItems = withEffective
     .filter((s: any) => {
       const d = s.effective_renewal_date as Date;
@@ -182,7 +187,7 @@ export default async function DashboardPage() {
     if (bc === "every_3_months" || bc === "3_months") return sum + n / 3;
     if (bc === "every_6_months" || bc === "6_months") return sum + n / 6;
     if (bc === "yearly") return sum + n / 12;
-    return sum + n; // monthly
+    return sum + n;
   }, 0);
 
   // Yearly spend (normalized)
@@ -200,12 +205,14 @@ export default async function DashboardPage() {
   }, 0);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="mx-auto w-full max-w-[1100px] px-4 py-10 space-y-8">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white">
+      <div className="mx-auto w-full max-w-[1100px] px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+              Dashboard
+            </h1>
             <p className="mt-2 text-sm text-black/60">
               Overview of your subscriptions and upcoming renewals.
             </p>
@@ -215,7 +222,6 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          {/* ✅ Removed Settings button (you already have it in top nav) */}
           <div className="flex items-center gap-3">
             <a
               href="#add-subscription"
@@ -227,47 +233,47 @@ export default async function DashboardPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
             <div className="text-sm font-semibold text-black/70">
               Total subscriptions
             </div>
-            <div className="mt-2 text-3xl font-semibold text-black">
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
               {totalSubs}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
             <div className="text-sm font-semibold text-black/70">
               Monthly spend
             </div>
-            <div className="mt-2 text-3xl font-semibold text-black">
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
               {preferredCurrency} {monthlySpend.toFixed(2)}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
             <div className="text-sm font-semibold text-black/70">Yearly spend</div>
-            <div className="mt-2 text-3xl font-semibold text-black">
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
               {preferredCurrency} {yearlySpend.toFixed(2)}
             </div>
           </section>
 
-          <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
             <div className="text-sm font-semibold text-black/70">Next renewal</div>
-            <div className="mt-2 text-3xl font-semibold text-black">
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
               {formatDate(nextUpcoming?.effective_renewal_date ?? null)}
             </div>
           </section>
         </div>
 
-        {/* ✅ Subscription Analytics (ONLY ONCE) */}
+        {/* Subscription Analytics */}
         <SubscriptionAnalytics subs={trackedSubs} />
 
         {/* Upcoming + Forecast */}
         <div className="space-y-6">
           {/* Upcoming Renewals */}
-          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-emerald-500/70" />
 
             <div className="flex items-start justify-between gap-3">
@@ -322,14 +328,18 @@ export default async function DashboardPage() {
                       ? s.amount.toFixed(2)
                       : s.amount ?? "—";
 
-                  const pct = Math.max(0, Math.min(100, (1 - diffDays / 7) * 100));
+                  const pct = Math.max(
+                    0,
+                    Math.min(100, (1 - diffDays / 7) * 100)
+                  );
 
                   return (
                     <div
                       key={String(s.id)}
                       className="group rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
                     >
-                      <div className="flex items-center justify-between gap-4">
+                      {/* ✅ responsive row */}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <MerchantIcon name={vendor} size={42} className="shrink-0" />
                           <div className="min-w-0">
@@ -343,7 +353,7 @@ export default async function DashboardPage() {
                           </div>
                         </div>
 
-                        <div className="shrink-0 text-right">
+                        <div className="shrink-0 sm:text-right">
                           <div className="text-sm font-semibold text-black">
                             {currency} {amount}
                           </div>
@@ -369,7 +379,7 @@ export default async function DashboardPage() {
           </section>
 
           {/* Payment Forecast */}
-          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-indigo-500/70" />
 
             <div className="flex items-start justify-between gap-3">
@@ -426,23 +436,26 @@ export default async function DashboardPage() {
                   return (
                     <div
                       key={String(s.id)}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:shadow-md"
+                      className="rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:shadow-md"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <MerchantIcon name={vendor} size={42} className="shrink-0" />
-                        <div className="min-w-0">
-                          <div className="font-semibold leading-tight truncate">
-                            {vendor}
-                          </div>
-                          <div className="text-xs text-black/55 truncate">
-                            {eff.toLocaleDateString("en-US")} • {due}
+                      {/* ✅ responsive row */}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <MerchantIcon name={vendor} size={42} className="shrink-0" />
+                          <div className="min-w-0">
+                            <div className="font-semibold leading-tight truncate">
+                              {vendor}
+                            </div>
+                            <div className="text-xs text-black/55 truncate">
+                              {eff.toLocaleDateString("en-US")} • {due}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="shrink-0 text-right">
-                        <div className="text-sm font-semibold text-black">
-                          {currency} {amount}
+                        <div className="shrink-0 sm:text-right">
+                          <div className="text-sm font-semibold text-black">
+                            {currency} {amount}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -451,7 +464,6 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            {/* Optional: show “showing X of Y” */}
             {forecastItems.length > 10 && (
               <p className="mt-3 text-xs text-black/50">
                 Showing 10 of {forecastItems.length}. Increase the limit if you want all.
@@ -463,13 +475,13 @@ export default async function DashboardPage() {
         {/* Tracked subscriptions + Add subscription section */}
         <section
           id="add-subscription"
-          className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur"
+          className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm"
         >
           <TrackedSubscriptionsSection initialSubs={trackedSubs} />
         </section>
 
         {/* Sign out */}
-        <section className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <section className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
           <form action="/auth/signout" method="post" className="flex justify-end">
             <button className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5">
               Sign out

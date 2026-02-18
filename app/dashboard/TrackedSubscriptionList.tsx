@@ -3,12 +3,12 @@
 import React from "react";
 import type { TrackedSub } from "./types";
 import MerchantIcon from "@/app/components/MerchantIcon";
-import { smartRenewal } from "@/lib/subscriptions/smartRenewal";
-import { effectiveNextRenewal } from "../../lib/subscriptions/effectiveNextRenewal";
-
 
 type Props = {
-  subs: TrackedSub[];
+  subs: (TrackedSub & {
+    effective_renewal_date?: Date | null;
+    daysLeft?: number | null;
+  })[];
   busyId: string | null;
   onDelete: (id: string) => void;
   onToggleCancel: (id: string, action: "cancel" | "reactivate") => void;
@@ -47,21 +47,18 @@ export default function TrackedSubscriptionList({
           const isCancelled = status === "cancelled" || !!s.cancelled_at;
           const isBusy = busyId === id;
 
-          const nextRenewal = effectiveNextRenewal({
-            renewalDate: s.renewal_date,
-            billingCycle: s.billing_cycle,
-            cancelled: isCancelled,
-          });
-
-          const { diffDays, isInvalidDate } = computeDayDiff(nextRenewal);
+          // ✅ from TrackedSubscriptionsSection (Smart Renewal Engine)
+          const eff: Date | null = s.effective_renewal_date ?? null;
+          const diffDays: number | null = s.daysLeft ?? null;
+          const isInvalidDate = !eff || diffDays === null;
 
           let state: "cancelled" | "expired" | "renews_soon" | "active" | "invalid" =
             "active";
 
           if (isCancelled) state = "cancelled";
           else if (isInvalidDate) state = "invalid";
-          else if (diffDays !== null && diffDays < 0) state = "expired";
-          else if (diffDays !== null && diffDays <= 7) state = "renews_soon";
+          else if (diffDays < 0) state = "expired";
+          else if (diffDays <= 7) state = "renews_soon";
           else state = "active";
 
           const currency = String(s.currency ?? "USD");
@@ -88,19 +85,17 @@ export default function TrackedSubscriptionList({
                       {currency} {amountText}
                     </div>
 
-                    {/* ✅ Only renewal date + relative days.
-                        NO "Renews soon" text here (only badge on the right). */}
                     <div className="mt-1 text-sm text-black/55">
                       Renews on{" "}
                       <span className="font-medium text-black/70">
-                         {formatDate(nextRenewal)}
+                        {formatDateFromDate(eff)}
                       </span>
                       {renderRelativeDays(diffDays, state)}
                     </div>
                   </div>
                 </div>
 
-                {/* ✅ Right badge: the ONLY place where "Renews soon" appears */}
+                {/* Right badge */}
                 <div className="flex shrink-0 items-start">
                   <StatusBadge state={state} />
                 </div>
@@ -229,26 +224,9 @@ function renderRelativeDays(diffDays: number | null, state: string) {
   );
 }
 
-function computeDayDiff(dateInput: string | Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const target = new Date(dateInput);
-  if (Number.isNaN(target.getTime())) {
-    return { diffDays: null as number | null, isInvalidDate: true };
-  }
-
-  target.setHours(0, 0, 0, 0);
-  const msPerDay = 1000 * 60 * 60 * 24;
-
-  const diff = Math.floor((target.getTime() - today.getTime()) / msPerDay);
-  return { diffDays: diff, isInvalidDate: false };
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return String(dateStr ?? "");
-  return d.toLocaleDateString("en-US"); // ✅ MM/DD/YYYY
+function formatDateFromDate(d: Date | null) {
+  if (!d) return "—";
+  return d.toLocaleDateString("en-US");
 }
 
 function formatAmount(amount: any) {

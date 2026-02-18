@@ -22,23 +22,28 @@ export default async function SettingsPage() {
     .maybeSingle();
 
   return (
-    <main className="mx-auto w-full max-w-[1100px] px-4 py-10">
+    <main className="mx-auto w-full max-w-[1100px] px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
       <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-2 text-sm text-black/60">Manage your reminder preferences and account details.</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settings</h1>
+        <p className="mt-2 text-sm text-black/60">
+          Manage your reminder preferences and account details.
+        </p>
       </div>
 
-      <SettingsForm
-        userEmail={user.email ?? ""}
-        initialProfile={{
-          full_name: profile?.full_name ?? "",
-          avatar_url: profile?.avatar_url ?? "",
-          reminders_enabled: !!profile?.reminders_enabled,
-          reminder_days: profile?.reminder_days ?? 3,
-          preferred_currency: profile?.preferred_currency ?? "USD",
-          timezone: profile?.timezone ?? "UTC",
-        }}
-      />
+      <div className="space-y-6">
+        {/* SettingsForm is the client component that renders the tabs + forms */}
+        <SettingsForm
+          userEmail={user.email ?? ""}
+          initialProfile={{
+            full_name: profile?.full_name ?? "",
+            avatar_url: profile?.avatar_url ?? "",
+            reminders_enabled: !!profile?.reminders_enabled,
+            reminder_days: profile?.reminder_days ?? 3,
+            preferred_currency: profile?.preferred_currency ?? "USD",
+            timezone: profile?.timezone ?? "UTC",
+          }}
+        />
+      </div>
     </main>
   );
 }

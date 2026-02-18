@@ -1,4 +1,3 @@
-// app/dashboard/TrackedSubscriptionsSection.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -7,6 +6,7 @@ import TrackedSubscriptionForm, {
   CreateTrackedSubPayload,
 } from "./TrackedSubscriptionForm";
 import type { TrackedSub } from "./types";
+import { effectiveNextRenewal } from "@/lib/subscriptions/effectiveNextRenewal";
 
 export default function TrackedSubscriptionsSection({
   initialSubs,
@@ -16,19 +16,31 @@ export default function TrackedSubscriptionsSection({
   const [subs, setSubs] = useState<TrackedSub[]>(initialSubs ?? []);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // ✅ Renewing Soon (next 7 days) — ACTIVE ONLY
-  const renewingSoon = useMemo(() => {
-    const list = subs
-      .filter((s: any) => String(s.status || "").toLowerCase() === "active")
-      .map((s: any) => ({
+  // ✅ Attach effective date + daysLeft (Smart Renewal Engine)
+  const subsWithEffective = useMemo(() => {
+    const today = startOfDay(new Date());
+
+    return (subs ?? []).map((s: any) => {
+      const eff = getEffectiveRenewalDate(s);
+      const daysLeft = eff ? daysUntilDate(eff, today) : null;
+
+      return {
         ...s,
-        daysLeft: daysUntil(s.renewal_date),
-      }))
+        effective_renewal_date: eff, // Date | null
+        daysLeft, // number | null
+      };
+    });
+  }, [subs]);
+
+  // ✅ Renewing Soon (next 7 days) — ACTIVE ONLY — using effective date
+  const renewingSoon = useMemo(() => {
+    const list = subsWithEffective
+      .filter((s: any) => String(s.status || "").toLowerCase() === "active")
       .filter((s: any) => s.daysLeft !== null && s.daysLeft >= 0 && s.daysLeft <= 7)
       .sort((a: any, b: any) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
 
     return list;
-  }, [subs]);
+  }, [subsWithEffective]);
 
   // Used for duplicate warning in UI
   const dedupeKeySet = useMemo(() => {
@@ -117,7 +129,9 @@ export default function TrackedSubscriptionsSection({
       const updated: TrackedSub | undefined = data?.sub;
       if (!(updated as any)?.id) return;
 
-      setSubs((prev) => prev.map((s: any) => (s.id === (updated as any).id ? updated : s)));
+      setSubs((prev) =>
+        prev.map((s: any) => (s.id === (updated as any).id ? updated : s))
+      );
     } finally {
       setBusyId(null);
     }
@@ -125,10 +139,8 @@ export default function TrackedSubscriptionsSection({
 
   return (
     <div className="mt-4">
-      
-
       <TrackedSubscriptionList
-        subs={subs}
+        subs={subsWithEffective as any} // ✅ pass effective_renewal_date + daysLeft
         busyId={busyId}
         onDelete={onDelete}
         onToggleCancel={onToggleCancel}
@@ -141,32 +153,33 @@ export default function TrackedSubscriptionsSection({
   );
 }
 
-/** Helpers */
-function daysUntil(dateInput: string | Date) {
-  const today = new Date();
-  const target = new Date(dateInput);
+/* ---------------- Smart Renewal Helpers ---------------- */
 
-  if (Number.isNaN(target.getTime())) return null;
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
 
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
+function getEffectiveRenewalDate(s: any): Date | null {
+  const next = effectiveNextRenewal({
+    renewalDate: s.renewal_date,
+    billingCycle: s.billing_cycle,
+    cancelled:
+      String(s.status ?? "").toLowerCase() === "cancelled" || !!s.cancelled_at,
+  });
 
-  const diffMs = target.getTime() - today.getTime();
+  return next ? startOfDay(new Date(next)) : null;
+}
+
+function daysUntilDate(target: Date, todayBase?: Date) {
+  const today = todayBase ? startOfDay(todayBase) : startOfDay(new Date());
+  const t = startOfDay(target);
+  const diffMs = t.getTime() - today.getTime();
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return String(dateStr);
-  return d.toLocaleDateString();
-}
-
-function badgeText(daysLeft: number | null) {
-  if (daysLeft === null) return "—";
-  if (daysLeft <= 0) return "today";
-  if (daysLeft === 1) return "in 1 day";
-  return `in ${daysLeft} days`;
-}
+/* ---------------- Existing Helpers (dedupe etc) ---------------- */
 
 function normalizeVendor(v: string) {
   return (v || "").trim().toLowerCase();
