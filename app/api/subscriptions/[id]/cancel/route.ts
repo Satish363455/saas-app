@@ -12,11 +12,15 @@ export async function POST(
   const { id } = await params;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  // TODO: If this route is "cancel", you probably want to update status, not delete.
+  // mark cancelled (preferred) — change to delete if you really want to remove the row
   const { error } = await supabase
     .from("tracked_subscriptions")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
