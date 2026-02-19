@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+type Params = { id: string };
+
 export async function POST(
   _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Params }
 ) {
-  const { id } = await context.params;
+  const { id } = params;
 
   const supabase = await createClient();
   const {
