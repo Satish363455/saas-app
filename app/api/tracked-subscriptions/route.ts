@@ -5,6 +5,17 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+export type CreateTrackedSubPayload = {
+  merchant_name: string;
+  plan_name?: string | null; // ✅ add this
+  amount: number;
+  currency: string;
+  renewal_date: string;
+  billing_cycle?: string;
+  status?: string;
+  notes?: string | null;
+};
+
 /**
  * GET: list current user's tracked subscriptions
  */
@@ -15,9 +26,7 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
   const { data, error } = await supabase
     .from("tracked_subscriptions")
@@ -25,9 +34,7 @@ export async function GET() {
     .eq("user_id", user.id)
     .order("renewal_date", { ascending: true });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ data });
 }
@@ -44,11 +51,9 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => ({}))) as Partial<CreateTrackedSubPayload>;
 
   const merchant_name = String(body.merchant_name ?? "").trim();
   const plan_name = body.plan_name ? String(body.plan_name).trim() : null;
@@ -59,22 +64,13 @@ export async function POST(req: Request) {
   const renewal_date = String(body.renewal_date ?? "").trim(); // YYYY-MM-DD
 
   if (!merchant_name) {
-    return NextResponse.json(
-      { error: "merchant_name is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "merchant_name is required" }, { status: 400 });
   }
   if (!renewal_date) {
-    return NextResponse.json(
-      { error: "renewal_date is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "renewal_date is required" }, { status: 400 });
   }
   if (!Number.isFinite(amountNum) || amountNum <= 0) {
-    return NextResponse.json(
-      { error: "amount must be a positive number" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
   }
 
   const { data, error } = await supabase
@@ -87,7 +83,7 @@ export async function POST(req: Request) {
       currency,
       renewal_date,
       status: "active",
-      cancelled_at: null, // ✅ needs column in DB
+      cancelled_at: null,
       notes,
     })
     .select("*")
@@ -124,19 +120,14 @@ export async function PATCH(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-
-  if (!id) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  }
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const body = await req.json().catch(() => ({}));
-  const action = String(body.action ?? "").toLowerCase();
+  const action = String((body as any).action ?? "").toLowerCase();
 
   if (action !== "cancel" && action !== "reactivate") {
     return NextResponse.json(
@@ -158,9 +149,7 @@ export async function PATCH(req: Request) {
     .select("*")
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ sub: data });
 }
@@ -175,16 +164,11 @@ export async function DELETE(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-
-  if (!id) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  }
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const { error } = await supabase
     .from("tracked_subscriptions")
@@ -192,9 +176,7 @@ export async function DELETE(req: Request) {
     .eq("id", id)
     .eq("user_id", user.id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ ok: true });
 }

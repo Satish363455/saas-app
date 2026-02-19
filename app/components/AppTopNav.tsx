@@ -1,11 +1,16 @@
 // app/components/AppTopNav.tsx
 import Link from "next/link";
-import UserNav from "./UserNav";
 import RenewalBell from "./RenewalBell";
+import UserNav from "./UserNav";
+import type { User } from "@supabase/supabase-js";
 
-export default function AppTopNav({ user }: { user: any }) {
+type Props = {
+  user: User | null;
+};
+
+export default function AppTopNav({ user }: Props) {
   return (
-    <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-black/10 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-100 text-emerald-700">
@@ -23,11 +28,10 @@ export default function AppTopNav({ user }: { user: any }) {
             Settings
           </Link>
 
-          {/* 🔔 stays client so it can fetch count */}
           <RenewalBell />
 
-          {/* ✅ user comes from server now (reliable) */}
-          <UserNav user={user} />
+          {/* UserNav is server component, doesn't need props */}
+          <UserNav />
         </nav>
       </div>
     </header>

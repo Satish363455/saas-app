@@ -51,42 +51,51 @@ export default function TrackedSubscriptionsSection({
     return set;
   }, [subs]);
 
-  const onCreate = async (payload: CreateTrackedSubPayload) => {
-    const res = await fetch("/api/tracked-subscriptions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+const onCreate = async (payload: CreateTrackedSubPayload) => {
+  const res = await fetch("/api/tracked-subscriptions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-    const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({}));
 
-    if (res.status === 409) {
-      return { ok: false as const, reason: "duplicate" as const, message: data?.error };
-    }
+  if (res.status === 409) {
+    return {
+      ok: false as const,
+      reason: "duplicate" as const,
+      message: data?.error,
+    };
+  }
 
-    if (!res.ok) {
-      return {
-        ok: false as const,
-        reason: "error" as const,
-        message: data?.error ?? "Failed to add subscription",
-      };
-    }
+  if (!res.ok) {
+    return {
+      ok: false as const,
+      reason: "error" as const,
+      message: data?.error ?? "Failed to add subscription",
+    };
+  }
 
-    const created: TrackedSub | undefined = data?.sub;
+  const created = (data as any)?.sub as TrackedSub | undefined;
 
-    if ((created as any)?.id) {
-      setSubs((prev) => {
-        const next = [created, ...prev];
-        next.sort((a: any, b: any) =>
-          String(a.renewal_date).localeCompare(String(b.renewal_date))
-        );
-        return next;
-      });
-    }
+  if (!created?.id) {
+    return {
+      ok: false as const,
+      reason: "error" as const,
+      message: (data as any)?.error ?? "Create failed",
+    };
+  }
 
-    return { ok: true as const };
-  };
+  setSubs((prev) => {
+    const next: TrackedSub[] = [created, ...prev];
+    next.sort((a, b) =>
+      String(a.renewal_date).localeCompare(String(b.renewal_date))
+    );
+    return next;
+  });
 
+  return { ok: true as const };
+};
   const onDelete = async (id: string) => {
     if (!id) return alert("Missing id");
     if (!confirm("Delete this tracked subscription?")) return;

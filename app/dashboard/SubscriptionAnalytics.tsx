@@ -14,6 +14,13 @@ function startOfDay(d: Date) {
   return x;
 }
 
+// Parse YYYY-MM-DD as LOCAL date (prevents timezone -1 day bug)
+function parseDateOnlyLocal(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
 function getEffectiveRenewalDate(s: any) {
   const next = effectiveNextRenewal({
     renewalDate: s.renewal_date,
@@ -22,7 +29,18 @@ function getEffectiveRenewalDate(s: any) {
       String(s.status ?? "").toLowerCase() === "cancelled" || !!s.cancelled_at,
   });
 
-  return next ? new Date(next) : null;
+  if (!next) return null;
+
+  // If engine returns YYYY-MM-DD, parse as LOCAL date
+  if (typeof next === "string" && /^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    const d = parseDateOnlyLocal(next);
+    return d ? startOfDay(d) : null;
+  }
+
+  // Otherwise parse normally
+  const d = new Date(next as any);
+  if (Number.isNaN(d.getTime())) return null;
+  return startOfDay(d);
 }
 
 export default function SubscriptionAnalytics({ subs = [] }: Props) {
@@ -30,39 +48,33 @@ export default function SubscriptionAnalytics({ subs = [] }: Props) {
   const in7 = startOfDay(new Date());
   in7.setDate(in7.getDate() + 7);
 
-  // cancelled = cancelled status OR cancelled_at set
   const cancelledCount = subs.filter((s) => {
     const status = String(s.status ?? "").toLowerCase();
     return status === "cancelled" || !!s.cancelled_at;
   }).length;
 
-  // activeLike = everything except cancelled
   const activeLike = subs.filter((s) => {
     const status = String(s.status ?? "active").toLowerCase();
     const cancelled = status === "cancelled" || !!s.cancelled_at;
     return !cancelled;
   });
 
-  // EXPIRED (Smart Renewal): effective renewal date is before today
   const expiredCount = activeLike.filter((s) => {
     const d = getEffectiveRenewalDate(s);
     if (!d) return false;
-    return startOfDay(d) < today;
+    return d < today;
   }).length;
 
-  // RENEWS SOON (Smart Renewal): effective renewal date between today and +7
   const renewSoonCount = activeLike.filter((s) => {
     const d = getEffectiveRenewalDate(s);
     if (!d) return false;
-    const sd = startOfDay(d);
-    return sd >= today && sd <= in7;
+    return d >= today && d <= in7;
   }).length;
 
-  // ACTIVE (Smart Renewal): effective renewal date today or later
   const activeCount = activeLike.filter((s) => {
     const d = getEffectiveRenewalDate(s);
     if (!d) return false;
-    return startOfDay(d) >= today;
+    return d >= today;
   }).length;
 
   const hasAny = activeCount + renewSoonCount + expiredCount + cancelledCount > 0;
@@ -96,7 +108,6 @@ export default function SubscriptionAnalytics({ subs = [] }: Props) {
         </div>
       </div>
 
-      {/* Donut */}
       <div className="mt-6 rounded-2xl border border-black/10 bg-white p-6">
         {hasAny ? (
           <StatusDonutChartClient

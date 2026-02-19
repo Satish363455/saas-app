@@ -5,12 +5,14 @@ import React, { useMemo, useState } from "react";
 
 export type CreateTrackedSubPayload = {
   merchant_name: string;
-  amount: number | string;
+  plan_name?: string | null;
+  amount: number;
   currency: string;
-  renewal_date: string; // YYYY-MM-DD (computed next renewal)
+  renewal_date: string;
+  billing_cycle?: string | null;
+  status?: string;
   notes?: string | null;
-  billing_cycle?: string | null; // e.g. "monthly", "3_months", "custom:3:months"
-  start_date?: string | null; // YYYY-MM-DD
+  start_date?: string | null;
 };
 
 export default function TrackedSubscriptionForm({
@@ -55,7 +57,7 @@ export default function TrackedSubscriptionForm({
 
   // dedupe key uses the computed renewal_date (so duplicates of same cycle date are detected)
   const dedupeKey = useMemo(() => {
-    return makeDedupeKey(merchantName, amount, currency, computedNextRenewal);
+    return makeDedupeKey(merchantName, Number(amount), currency, computedNextRenewal);
   }, [merchantName, amount, currency, computedNextRenewal]);
 
   const isPotentialDuplicate = useMemo(() => {
@@ -77,6 +79,13 @@ export default function TrackedSubscriptionForm({
     try {
       setSaving(true);
 
+      // Validate/convert amount
+      const amountNumber = Number(amount);
+      if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+        setBanner("Amount must be a positive number");
+        return;
+      }
+
       // Build billing_cycle string to store (useful for server)
       let billing_cycle_payload: string | null = null;
       if (billingCycle === "custom") {
@@ -88,7 +97,7 @@ export default function TrackedSubscriptionForm({
       const payload: CreateTrackedSubPayload = {
         merchant_name: merchantName.trim(),
         plan_name: planName.trim() ? planName.trim() : null,
-        amount,
+        amount: amountNumber,
         currency,
         renewal_date: computedNextRenewal, // YYYY-MM-DD
         notes: notes.trim() ? notes.trim() : null,
@@ -147,7 +156,15 @@ export default function TrackedSubscriptionForm({
           />
         </div>
 
-
+        <div>
+          <label className="block text-sm mb-1">Plan (optional)</label>
+          <input
+            className="border rounded-md p-2 w-full bg-transparent"
+            value={planName}
+            onChange={(e) => setPlanName(e.target.value)}
+            placeholder="Prime Monthly / Basic"
+          />
+        </div>
 
         <div className="flex gap-3">
           <div className="flex-1">
@@ -269,6 +286,7 @@ export default function TrackedSubscriptionForm({
             onClick={() => {
               // reset to defaults
               setMerchantName("");
+              setPlanName("");
               setAmount("9.99");
               setCurrency("USD");
               setBillingCycle("monthly");
@@ -331,6 +349,8 @@ function computeNextRenewal(
       // weekly handled as 7 days per step
       stepUnit = "days";
       break;
+    case "every_2_weeks":
+    case "every_2_weeks":
     case "2_weeks":
       stepN = 14;
       stepUnit = "days";
@@ -339,10 +359,12 @@ function computeNextRenewal(
       stepN = 1;
       stepUnit = "months";
       break;
+    case "every_3_months":
     case "3_months":
       stepN = 3;
       stepUnit = "months";
       break;
+    case "every_6_months":
     case "6_months":
       stepN = 6;
       stepUnit = "months";

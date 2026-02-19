@@ -26,7 +26,6 @@ export default async function UserNav() {
   const name = profile?.full_name || user.email || "S";
   const initial = (name ?? "S").charAt(0).toUpperCase();
 
-  // Small circular avatar that links to /account (NOT /settings)
   return (
     <Link
       href="/account"

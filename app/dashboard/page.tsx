@@ -7,6 +7,11 @@ import type { TrackedSub } from "./types";
 import MerchantIcon from "@/app/components/MerchantIcon";
 import SubscriptionAnalytics from "./SubscriptionAnalytics";
 import { effectiveNextRenewal } from "@/lib/subscriptions/effectiveNextRenewal";
+import DashboardShell from "./components/DashboardShell";
+import KpiGrid from "./components/KpiGrid";
+import UpcomingRenewalsCard from "./components/UpcomingRenewalsCard";
+import ForecastCard from "./components/ForecastCard";
+
 
 export const dynamic = "force-dynamic";
 
@@ -204,291 +209,35 @@ export default async function DashboardPage() {
     return sum + n * 12;
   }, 0);
 
+  // -------------------------
+  // NEW: render using new components / layout
+  // -------------------------
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white">
-      <div className="mx-auto w-full max-w-[1100px] px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-sm text-black/60">
-              Overview of your subscriptions and upcoming renewals.
-            </p>
-            <p className="mt-1 text-xs text-black/50">
-              Logged in as{" "}
-              <span className="font-medium text-black/75">{user.email}</span>
-            </p>
-          </div>
+    <DashboardShell userEmail={user.email ?? ""}>
+      {/* KPI / summary grid */}
+      <KpiGrid
+        total={totalSubs}
+        monthly={monthlySpend}
+        yearly={yearlySpend}
+        nextRenewal={formatDate(nextUpcoming?.effective_renewal_date ?? null)}
+        currency={preferredCurrency}
+      />
 
-          <div className="flex items-center gap-3">
-            <a
-              href="#add-subscription"
-              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
-            >
-              + Add Subscription
-            </a>
-          </div>
-        </div>
-
-        {/* Summary cards */}
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-black/70">
-              Total subscriptions
-            </div>
-            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
-              {totalSubs}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-black/70">
-              Monthly spend
-            </div>
-            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
-              {preferredCurrency} {monthlySpend.toFixed(2)}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-black/70">Yearly spend</div>
-            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
-              {preferredCurrency} {yearlySpend.toFixed(2)}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-black/70">Next renewal</div>
-            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-black">
-              {formatDate(nextUpcoming?.effective_renewal_date ?? null)}
-            </div>
-          </section>
-        </div>
-
-        {/* Subscription Analytics */}
+      {/* keep analytics (optional) */}
+      <div className="mt-6">
         <SubscriptionAnalytics subs={trackedSubs} />
-
-        {/* Upcoming + Forecast */}
-        <div className="space-y-6">
-          {/* Upcoming Renewals */}
-          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-emerald-500/70" />
-
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-black flex items-center gap-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-700">
-                    ⏳
-                  </span>
-                  Upcoming Renewals
-                </h2>
-                <p className="mt-1 text-xs text-black/50">
-                  Using Smart Renewal Engine dates
-                </p>
-              </div>
-
-              <span className="shrink-0 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
-                Next 7 days
-              </span>
-            </div>
-
-            <div className="mt-5 space-y-3 max-h-[360px] overflow-auto pr-1">
-              {upcoming.length === 0 ? (
-                <p className="text-sm text-black/60">
-                  No renewals in the next 7 days.
-                </p>
-              ) : (
-                upcoming.map((s: any) => {
-                  const vendor = String(
-                    s.merchant_name ?? s.vendor ?? "Subscription"
-                  );
-
-                  const eff: Date = s.effective_renewal_date as Date;
-                  const diffDays = daysUntilDate(eff);
-
-                  const badgeText =
-                    diffDays <= 0
-                      ? "Today"
-                      : diffDays === 1
-                      ? "Tomorrow"
-                      : `In ${diffDays} days`;
-
-                  const badgeClass =
-                    diffDays <= 1
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : diffDays <= 3
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-                  const currency = String(s.currency ?? preferredCurrency ?? "USD");
-                  const amount =
-                    typeof s.amount === "number"
-                      ? s.amount.toFixed(2)
-                      : s.amount ?? "—";
-
-                  const pct = Math.max(
-                    0,
-                    Math.min(100, (1 - diffDays / 7) * 100)
-                  );
-
-                  return (
-                    <div
-                      key={String(s.id)}
-                      className="group rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
-                    >
-                      {/* ✅ responsive row */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <MerchantIcon name={vendor} size={42} className="shrink-0" />
-                          <div className="min-w-0">
-                            <div className="font-semibold leading-tight truncate">
-                              {vendor}
-                            </div>
-                            <div className="text-xs text-black/55 truncate">
-                              {s.plan ?? s.plan_name ?? "Subscription"} •{" "}
-                              {eff.toLocaleDateString("en-US")}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 sm:text-right">
-                          <div className="text-sm font-semibold text-black">
-                            {currency} {amount}
-                          </div>
-                          <span
-                            className={`mt-1 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass}`}
-                          >
-                            {badgeText}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
-                        <div
-                          className="h-full rounded-full bg-emerald-500/70 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-          {/* Payment Forecast */}
-          <section className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-indigo-500/70" />
-
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-black flex items-center gap-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-700">
-                    📈
-                  </span>
-                  Payment Forecast
-                </h2>
-                <p className="mt-1 text-xs text-black/50">
-                  Uses Smart Renewal Engine dates (Next 30 days)
-                </p>
-              </div>
-
-              <span className="shrink-0 rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70">
-                Next 30 days
-              </span>
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-black/10 bg-white px-4 py-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-black/60">Expected total</span>
-                <span className="text-base font-semibold text-black">
-                  {preferredCurrency} {expectedTotal.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3 max-h-[420px] overflow-auto pr-1">
-              {forecastItems.length === 0 ? (
-                <p className="text-sm text-black/60">
-                  No payments due in the next 30 days.
-                </p>
-              ) : (
-                forecastItems.slice(0, 10).map((s: any) => {
-                  const vendor = String(s.merchant_name ?? "Subscription");
-                  const currency = String(s.currency ?? preferredCurrency ?? "USD");
-                  const amount =
-                    typeof s.amount === "number"
-                      ? s.amount.toFixed(2)
-                      : s.amount ?? "—";
-
-                  const eff: Date = s.effective_renewal_date as Date;
-                  const diffDays = daysUntilDate(eff);
-
-                  const due =
-                    diffDays <= 0
-                      ? "Due today"
-                      : diffDays === 1
-                      ? "Due tomorrow"
-                      : `Due in ${diffDays} days`;
-
-                  return (
-                    <div
-                      key={String(s.id)}
-                      className="rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition hover:shadow-md"
-                    >
-                      {/* ✅ responsive row */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <MerchantIcon name={vendor} size={42} className="shrink-0" />
-                          <div className="min-w-0">
-                            <div className="font-semibold leading-tight truncate">
-                              {vendor}
-                            </div>
-                            <div className="text-xs text-black/55 truncate">
-                              {eff.toLocaleDateString("en-US")} • {due}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 sm:text-right">
-                          <div className="text-sm font-semibold text-black">
-                            {currency} {amount}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {forecastItems.length > 10 && (
-              <p className="mt-3 text-xs text-black/50">
-                Showing 10 of {forecastItems.length}. Increase the limit if you want all.
-              </p>
-            )}
-          </section>
-        </div>
-
-        {/* Tracked subscriptions + Add subscription section */}
-        <section
-          id="add-subscription"
-          className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm"
-        >
-          <TrackedSubscriptionsSection initialSubs={trackedSubs} />
-        </section>
-
-        {/* Sign out */}
-        <section className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
-          <form action="/auth/signout" method="post" className="flex justify-end">
-            <button className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold hover:bg-black/5">
-              Sign out
-            </button>
-          </form>
-        </section>
       </div>
-    </main>
+
+      {/* Upcoming renewals + Forecast */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <UpcomingRenewalsCard items={upcoming} currency={preferredCurrency} />
+        <ForecastCard total={expectedTotal} currency={preferredCurrency} />
+      </div>
+
+      {/* tracked subscriptions list + add form */}
+      <div className="mt-6">
+        <TrackedSubscriptionsSection initialSubs={trackedSubs} />
+      </div>
+    </DashboardShell>
   );
 }

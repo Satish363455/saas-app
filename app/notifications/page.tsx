@@ -54,7 +54,11 @@ export default async function NotificationsPage() {
       cancelled: false,
     });
 
-    const nextDate = new Date(next);
+    // skip null/empty next values
+    if (!next) continue;
+
+    // ensure next is treated as a string (TS-friendly)
+    const nextDate = new Date(String(next));
     if (Number.isNaN(nextDate.getTime())) continue;
 
     const diff = daysBetween(today, nextDate);

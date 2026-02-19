@@ -4,9 +4,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20" as any,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!); // removed apiVersion override
 
 export async function POST(req: Request) {
   const { userId, email } = await req.json();
