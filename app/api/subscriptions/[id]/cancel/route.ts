@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type RouteParams = { id: string };
-
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<RouteParams> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
 
@@ -19,7 +17,6 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Mark as cancelled (adjust fields if your schema differs)
   const { error } = await supabase
     .from("tracked_subscriptions")
     .update({
