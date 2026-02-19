@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+type RouteParams = { id: string };
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<RouteParams> }
 ) {
   const { id } = await params;
 
@@ -20,14 +19,19 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // mark cancelled (preferred) — change to delete if you really want to remove the row
+  // Mark as cancelled (adjust fields if your schema differs)
   const { error } = await supabase
     .from("tracked_subscriptions")
-    .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .eq("user_id", user.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
