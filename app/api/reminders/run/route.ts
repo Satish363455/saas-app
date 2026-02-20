@@ -2,49 +2,75 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || "");
 
 async function runReminders(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const secret = searchParams.get("secret");
-  const test = searchParams.get("test");
+  try {
+    const { searchParams } = new URL(req.url);
+    const secret = searchParams.get("secret");
+    const test = searchParams.get("test");
+    const debug = searchParams.get("debug");
 
-  if (!secret || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // ✅ TEST MODE: send an email immediately
-  if (test === "1") {
-    const to =
-      process.env.REMINDER_TEST_EMAIL ||
-      process.env.NEXT_PUBLIC_TEST_EMAIL || // optional fallback
-      "";
-
-    if (!to || !to.includes("@")) {
-      return NextResponse.json(
-        { error: "Missing REMINDER_TEST_EMAIL in env" },
-        { status: 400 }
-      );
+    if (!secret || secret !== process.env.CRON_SECRET) {
+      console.warn("Unauthorized attempt to run reminders", { got: secret });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || "SubWise <onboarding@resend.dev>",
-      to,
-      subject: "✅ SubWise Reminder Test Email",
-      html: `<p>If you got this, Render cron + reminders route works 🎉</p>`,
-    });
+    // TEST mode: send single test email and return result
+    if (test === "1") {
+      const to =
+        process.env.REMINDER_TEST_EMAIL ||
+        process.env.NEXT_PUBLIC_TEST_EMAIL ||
+        "";
 
-    return NextResponse.json({ ok: true, testEmailSent: true, result });
+      if (!to || !to.includes("@")) {
+        const msg = "Missing or invalid REMINDER_TEST_EMAIL environment variable";
+        console.error(msg, { REMINDER_TEST_EMAIL: process.env.REMINDER_TEST_EMAIL });
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+
+      if (!process.env.RESEND_API_KEY) {
+        const msg = "Missing RESEND_API_KEY environment variable";
+        console.error(msg);
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
+
+      // Build a small test email
+      const payload = {
+        from: process.env.RESEND_FROM_EMAIL || "SubWise <noreply@yourdomain.com>",
+        to,
+        subject: "SubWise — Test reminder email",
+        html: `<p>This is a SubWise test reminder. If you receive this, the reminders route + Resend are working.</p>
+               <p>time: ${new Date().toISOString()}</p>`,
+      };
+
+      console.log("Sending test email", { to, from: payload.from });
+
+      try {
+        const result = await resend.emails.send(payload);
+        console.log("Resend.send result:", result);
+        // Return debug information when requested
+        if (debug === "1") return NextResponse.json({ ok: true, testEmailSent: true, result });
+        // Otherwise return a smaller success object
+        return NextResponse.json({ ok: true, testEmailSent: true, id: (result as any)?.id || null });
+      } catch (sendErr: any) {
+        console.error("Resend.send error:", sendErr);
+        return NextResponse.json({ ok: false, error: String(sendErr?.message || sendErr), detail: sendErr }, { status: 500 });
+      }
+    }
+
+    // TODO: insert your actual reminder-sending logic here and return useful info
+    console.log("Reminders route called (no test param), running scheduled logic placeholder");
+    return NextResponse.json({ ok: true, ran: true });
+  } catch (err: any) {
+    console.error("runReminders - unexpected error:", err);
+    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });
   }
-
-  // TODO: your real reminder sending logic goes here
-  return NextResponse.json({ ok: true, ran: true });
 }
 
 export async function GET(req: NextRequest) {
   return runReminders(req);
 }
-
 export async function POST(req: NextRequest) {
   return runReminders(req);
 }
