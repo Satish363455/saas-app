@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "sonner";
-import AppTopNav from "@/app/components/AppTopNav";
+import AppTopNav from "@/components/AppTopNav";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {

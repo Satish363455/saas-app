@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { TrackedSub } from "./types";
-import MerchantIcon from "@/app/components/MerchantIcon";
+import MerchantIcon from "@/components/MerchantIcon";
 
 type Props = {
   subs: (TrackedSub & {

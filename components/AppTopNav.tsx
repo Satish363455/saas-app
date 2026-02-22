@@ -24,7 +24,7 @@ export default function AppTopNav({ user }: Props) {
             Dashboard
           </Link>
 
-          <Link href="/settings" className="text-zinc-800 hover:text-zinc-950">
+          <Link href="/dashboard/settings" className="text-zinc-800 hover:text-zinc-950">
             Settings
           </Link>
 

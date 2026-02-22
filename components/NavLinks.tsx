@@ -16,7 +16,7 @@ export default function NavLinks() {
   const isDashboard =
     pathname === "/dashboard" || pathname?.startsWith("/dashboard/");
   const isSettings =
-    pathname === "/settings" || pathname?.startsWith("/settings/");
+    pathname === "dashboard/settings" || pathname?.startsWith("/settings/");
   const isAccount =
     pathname === "/account" || pathname?.startsWith("/account/");
 
@@ -31,11 +31,11 @@ export default function NavLinks() {
       </Link>
 
       <Link
-        href="/settings"
+        href="/dashboard/settings"
         className={navClass(isSettings)}
         aria-current={isSettings ? "page" : undefined}
       >
-        Settings
+      Settings
       </Link>
 
       {/* Optional: if you want Account visible in top nav too */}

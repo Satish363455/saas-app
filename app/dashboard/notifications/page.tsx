@@ -1,8 +1,8 @@
 // app/notifications/page.tsx
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server"; // server-only is OK here
-import MerchantIcon from "@/app/components/MerchantIcon";
-import { effectiveNextRenewal } from "../../lib/subscriptions/effectiveNextRenewal";
+import MerchantIcon from "@/components/MerchantIcon";
+import { effectiveNextRenewal } from "@/lib/subscriptions/effectiveNextRenewal";
 import { parseLocalYMD } from "@/lib/date";
 
 function startOfDay(d: Date) {

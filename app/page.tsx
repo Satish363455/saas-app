@@ -1,6 +1,6 @@
 // app/page.tsx
 import Link from "next/link";
-import MerchantIcon from "@/app/components/MerchantIcon";
+import MerchantIcon from "@/components/MerchantIcon";
 import { Plus, Bell, BarChart3 } from "lucide-react";
 
 const demo = [

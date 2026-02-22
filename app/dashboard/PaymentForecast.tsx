@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import type { TrackedSub } from "./types";
-import MerchantIcon from "@/app/components/MerchantIcon";
+import MerchantIcon from "@/components/MerchantIcon";
 
 export default function PaymentForecast({
   subs,

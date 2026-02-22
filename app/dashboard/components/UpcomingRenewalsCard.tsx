@@ -1,6 +1,6 @@
 // app/dashboard/components/UpcomingRenewalsCard.tsx
 
-import MerchantIcon from "@/app/components/MerchantIcon";
+import MerchantIcon from "@/components/MerchantIcon";
 
 type Props = {
   items: any[];
