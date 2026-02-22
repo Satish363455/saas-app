@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { toISODate, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
+import { toISODateLocal, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
 
 type TrackedSubscription = {
   id: string;
