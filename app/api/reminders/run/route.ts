@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { toISODateLocal, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
+import { toISODateLocal, parseLocalYMD } from "@/lib/date";
 
 type TrackedSubscription = {
   id: string;
   user_id: string;
   merchant_name: string | null;
   plan_name: string | null;
-
-  // ✅ DATE column expected as YYYY-MM-DD (not timestamptz)
-  renewal_date: string;
-
+  renewal_date: string; // DATE column => "YYYY-MM-DD"
   amount: number | null;
   currency: string | null;
   remind_days_before: number | null;
@@ -105,7 +102,7 @@ async function run(req: NextRequest) {
     const maxDate = addDaysLocal(today, DEFAULT_DAYS_BEFORE);
 
     // ✅ Compare DATE column using YYYY-MM-DD strings (LOCAL)
-    const maxYMD = toISODate(maxDate);
+    const maxYMD = toISODateLocal(maxDate);
 
     const { data: subs, error: subsErr } = await supabase
       .from("tracked_subscriptions")

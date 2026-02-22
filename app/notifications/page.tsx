@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server"; // server-only is OK here
 import MerchantIcon from "@/app/components/MerchantIcon";
 import { effectiveNextRenewal } from "../../lib/subscriptions/effectiveNextRenewal";
+import { parseLocalYMD } from "@/lib/date";
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -58,7 +59,7 @@ export default async function NotificationsPage() {
     if (!next) continue;
 
     // ensure next is treated as a string (TS-friendly)
-    const nextDate = new Date(String(next));
+    const nextDate = parseLocalYMD(String(next));
     if (Number.isNaN(nextDate.getTime())) continue;
 
     const diff = daysBetween(today, nextDate);
@@ -71,7 +72,7 @@ export default async function NotificationsPage() {
     // Recent auto-renewed:
     // If your stored renewal_date is behind today, effectiveNextRenewal "jumps" forward.
     // We'll treat anything where the stored renewal_date was within the last 7 days as “recent”
-    const stored = new Date(s.renewal_date);
+    const stored = parseLocalYMD(s.renewal_date);
     if (!Number.isNaN(stored.getTime())) {
       const ago = daysBetween(stored, today);
       if (ago >= 0 && ago <= 7) {
