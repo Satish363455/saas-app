@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
-import { toISODate, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
+import { toISODateLocal, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
 
 export const runtime = "nodejs";
 
