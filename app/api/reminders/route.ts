@@ -83,8 +83,8 @@ export async function GET(req: Request) {
     const today = startOfDayLocal(new Date());
     const end = addDaysLocal(today, DAYS_BEFORE);
 
-    const fromYMD = toISODate(today);
-    const toYMD = toISODate(end);
+    const fromYMD = toISODateLocal(today);
+    const toYMD = toISODateLocal(end);
 
     const { data: tracked, error: trackedErr } = await supabaseAdmin
       .from("tracked_subscriptions")
