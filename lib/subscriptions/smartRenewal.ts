@@ -1,4 +1,5 @@
 // lib/subscriptions/smartRenewal.ts
+import { toLocalYMD } from "@/lib/date";
 
 type Input = {
   renewalDate: string | null | undefined;
@@ -65,5 +66,5 @@ export function smartRenewal({
     maxLoops--;
   }
 
-  return current.toISOString().split("T")[0];
+  return toLocalYMD(current);
 }

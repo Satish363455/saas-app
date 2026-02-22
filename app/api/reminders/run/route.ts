@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { toISODate, parseLocalYMD } from "@/lib/date"; // <-- adjust path if needed
 
 type TrackedSubscription = {
   id: string;
   user_id: string;
   merchant_name: string | null;
   plan_name: string | null;
-  renewal_date: string; // timestamptz comes back as ISO string
+
+  // ✅ DATE column expected as YYYY-MM-DD (not timestamptz)
+  renewal_date: string;
+
   amount: number | null;
   currency: string | null;
   remind_days_before: number | null;
@@ -16,7 +20,7 @@ type TrackedSubscription = {
 };
 
 type Profile = {
-  id: string; // user_id
+  id: string;
   email: string | null;
 };
 
@@ -32,10 +36,21 @@ function requireEnv(name: string): string {
   return v;
 }
 
-function addDays(date: Date, days: number) {
-  const d = new Date(date);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
+function startOfDayLocal(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function addDaysLocal(d: Date, days: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+
+function fmtDateYMD(ymd: string) {
+  if (!ymd) return "";
+  return parseLocalYMD(ymd).toLocaleDateString();
 }
 
 export async function GET(req: NextRequest) {
@@ -55,19 +70,15 @@ async function run(req: NextRequest) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Test mode: send one simple email and exit (kept from your version)
+  // Test mode
   const test = searchParams.get("test");
   if (test === "1") {
     const to = process.env.REMINDER_TEST_EMAIL || "";
     if (!to.includes("@")) {
-      return json(
-        { error: "Missing/invalid REMINDER_TEST_EMAIL" },
-        { status: 400 }
-      );
+      return json({ error: "Missing/invalid REMINDER_TEST_EMAIL" }, { status: 400 });
     }
 
-    const from =
-      process.env.RESEND_FROM_EMAIL || "SubWise <onboarding@resend.dev>";
+    const from = process.env.RESEND_FROM_EMAIL || "SubWise <onboarding@resend.dev>";
 
     const result = await resend.emails.send({
       from,
@@ -79,12 +90,10 @@ async function run(req: NextRequest) {
     return json({ ok: true, testEmailSent: true, result });
   }
 
-  // ---- REAL REMINDER LOGIC BELOW ----
   try {
     const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
     const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const from =
-      process.env.RESEND_FROM_EMAIL || "SubWise <onboarding@resend.dev>";
+    const from = process.env.RESEND_FROM_EMAIL || "SubWise <onboarding@resend.dev>";
 
     const DEFAULT_DAYS_BEFORE = Number(process.env.REMINDER_DAYS_BEFORE || "3");
 
@@ -92,26 +101,28 @@ async function run(req: NextRequest) {
       auth: { persistSession: false },
     });
 
-    const now = new Date();
-    const maxDate = addDays(now, DEFAULT_DAYS_BEFORE);
+    const today = startOfDayLocal(new Date());
+    const maxDate = addDaysLocal(today, DEFAULT_DAYS_BEFORE);
 
-    // 1) Fetch subscriptions due soon
+    // ✅ Compare DATE column using YYYY-MM-DD strings (LOCAL)
+    const maxYMD = toISODate(maxDate);
+
     const { data: subs, error: subsErr } = await supabase
       .from("tracked_subscriptions")
       .select(
         "id,user_id,merchant_name,plan_name,renewal_date,amount,currency,remind_days_before,last_reminder_sent_at,status"
       )
       .neq("status", "cancelled")
-      .lte("renewal_date", maxDate.toISOString());
+      .lte("renewal_date", maxYMD);
 
     if (subsErr) throw subsErr;
 
     const due = (subs || []) as TrackedSubscription[];
 
-    // 2) Filter out ones already reminded "recently"
-    // (simple rule: if last_reminder_sent_at exists and is within last 20 hours, skip)
+    // skip if reminder was sent recently
     const MIN_HOURS_BETWEEN = 20;
     const MIN_MS = MIN_HOURS_BETWEEN * 60 * 60 * 1000;
+    const now = new Date();
 
     const toSend = due.filter((s) => {
       if (!s.last_reminder_sent_at) return true;
@@ -123,7 +134,6 @@ async function run(req: NextRequest) {
       return json({ ok: true, ran: true, due: due.length, sent: 0 });
     }
 
-    // 3) Load emails for user_ids (assumes profiles table with email)
     const userIds = Array.from(new Set(toSend.map((s) => s.user_id)));
 
     const { data: profiles, error: profErr } = await supabase
@@ -138,34 +148,24 @@ async function run(req: NextRequest) {
       if (p.email && p.email.includes("@")) emailByUser.set(p.id, p.email);
     });
 
-    // 4) Send emails + update last_reminder_sent_at
     const results: Array<{ subId: string; to: string; ok: boolean; error?: string }> = [];
 
     for (const s of toSend) {
-      const to =
-        emailByUser.get(s.user_id) ||
-        process.env.REMINDER_TEST_EMAIL || // fallback so you can still test
-        "";
-
+      const to = emailByUser.get(s.user_id) || process.env.REMINDER_TEST_EMAIL || "";
       if (!to.includes("@")) {
-        results.push({
-          subId: s.id,
-          to: "(missing email)",
-          ok: false,
-          error: "No recipient email found",
-        });
+        results.push({ subId: s.id, to: "(missing email)", ok: false, error: "No recipient email found" });
         continue;
       }
 
       const merchant = s.merchant_name || "Subscription";
       const plan = s.plan_name ? ` (${s.plan_name})` : "";
-      const renewDate = new Date(s.renewal_date).toLocaleDateString();
+      const renewDate = fmtDateYMD(String(s.renewal_date));
 
       const subject = `Reminder: ${merchant}${plan} renews on ${renewDate}`;
 
       const amountText =
         s.amount != null && s.currency
-          ? `<p><b>Amount:</b> ${s.amount} ${s.currency}</p>`
+          ? `<p><b>Amount:</b> ${Number(s.amount).toFixed(2)} ${s.currency}</p>`
           : "";
 
       try {
@@ -182,7 +182,6 @@ async function run(req: NextRequest) {
           `,
         });
 
-        // mark sent
         await supabase
           .from("tracked_subscriptions")
           .update({ last_reminder_sent_at: now.toISOString() })
@@ -207,9 +206,6 @@ async function run(req: NextRequest) {
         : { ok: true, ran: true, due: due.length, sent: sentCount }
     );
   } catch (e: unknown) {
-    return json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
-      { status: 500 }
-    );
+    return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

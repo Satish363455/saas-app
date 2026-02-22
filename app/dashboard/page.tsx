@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import TrackedSubscriptionsSection from "./TrackedSubscriptionsSection";
 import type { TrackedSub } from "./types";
-import MerchantIcon from "@/app/components/MerchantIcon";
 import SubscriptionAnalytics from "./SubscriptionAnalytics";
 import { effectiveNextRenewal } from "@/lib/subscriptions/effectiveNextRenewal";
 import DashboardShell from "./components/DashboardShell";
@@ -12,29 +11,55 @@ import KpiGrid from "./components/KpiGrid";
 import UpcomingRenewalsCard from "./components/UpcomingRenewalsCard";
 import ForecastCard from "./components/ForecastCard";
 
-
 export const dynamic = "force-dynamic";
 
-/* ---------------- Helpers ---------------- */
+/* ---------------- Date Helpers (timezone-safe) ---------------- */
 
-function startOfDay(d: Date) {
+function startOfDayLocal(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
 
-function daysUntilDate(d: Date) {
-  const now = startOfDay(new Date());
-  const sd = startOfDay(d);
-  return Math.ceil((sd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+function isYMD(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-// Parse YYYY-MM-DD as *local* date (prevents timezone -1 day bug)
-function parseDateOnlyLocal(ymd: string) {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
+/**
+ * ✅ Parse a date string safely:
+ * - If "YYYY-MM-DD" => parse as LOCAL midnight (prevents -1 day shift)
+ * - Else => parse normally (ISO timestamps already have timezone info)
+ */
+function parseDateSafe(input: string): Date | null {
+  const s = String(input || "").trim();
+  if (!s) return null;
+
+  if (isYMD(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d); // ✅ LOCAL midnight
+  }
+
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
+
+/**
+ * ✅ Days until target, stable across DST:
+ * round based on start-of-day local
+ */
+function daysUntilDate(target: Date) {
+  const today = startOfDayLocal(new Date());
+  const t = startOfDayLocal(target);
+  return Math.round((t.getTime() - today.getTime()) / 86400000);
+}
+
+function formatDate(d: Date | null) {
+  if (!d) return "—";
+  return d.toLocaleDateString("en-US");
+}
+
+/* ---------------- Smart Renewal ---------------- */
 
 function getEffectiveRenewalDate(s: any) {
   const next = effectiveNextRenewal({
@@ -46,18 +71,11 @@ function getEffectiveRenewalDate(s: any) {
 
   if (!next) return null;
 
-  // If engine returns YYYY-MM-DD, parse as LOCAL date
-  if (typeof next === "string" && /^\d{4}-\d{2}-\d{2}$/.test(next)) {
-    const d = parseDateOnlyLocal(next);
-    return d ? startOfDay(d) : null;
-  }
+  // next may be "YYYY-MM-DD" or ISO
+  const parsed = parseDateSafe(String(next));
+  if (!parsed) return null;
 
-  return startOfDay(new Date(next));
-}
-
-function formatDate(d: Date | null) {
-  if (!d) return "—";
-  return d.toLocaleDateString("en-US");
+  return startOfDayLocal(parsed);
 }
 
 /* ---------------- Page ---------------- */
@@ -95,11 +113,11 @@ export default async function DashboardPage() {
   const preferredCurrency = profile?.preferred_currency ?? "USD";
 
   // Dates
-  const today = startOfDay(new Date());
-  const in7 = startOfDay(new Date());
+  const today = startOfDayLocal(new Date());
+  const in7 = startOfDayLocal(new Date());
   in7.setDate(in7.getDate() + 7);
 
-  const in30 = startOfDay(new Date());
+  const in30 = startOfDayLocal(new Date());
   in30.setDate(in30.getDate() + 30);
 
   // Total subs
@@ -209,12 +227,8 @@ export default async function DashboardPage() {
     return sum + n * 12;
   }, 0);
 
-  // -------------------------
-  // NEW: render using new components / layout
-  // -------------------------
   return (
     <DashboardShell userEmail={user.email ?? ""}>
-      {/* KPI / summary grid */}
       <KpiGrid
         total={totalSubs}
         monthly={monthlySpend}
@@ -223,18 +237,15 @@ export default async function DashboardPage() {
         currency={preferredCurrency}
       />
 
-      {/* keep analytics (optional) */}
       <div className="mt-6">
         <SubscriptionAnalytics subs={trackedSubs} />
       </div>
 
-      {/* Upcoming renewals + Forecast */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <UpcomingRenewalsCard items={upcoming} currency={preferredCurrency} />
         <ForecastCard total={expectedTotal} currency={preferredCurrency} />
       </div>
 
-      {/* tracked subscriptions list + add form */}
       <div className="mt-6">
         <TrackedSubscriptionsSection initialSubs={trackedSubs} />
       </div>

@@ -1,7 +1,26 @@
 export type BillingCycle = "weekly" | "monthly" | "yearly";
 
+/** Parse YYYY-MM-DD as a LOCAL date (no UTC shift) */
+export function parseLocalYMD(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Convert Date -> YYYY-MM-DD using LOCAL calendar (no UTC shift) */
+export function toISODate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Next renewal is ALWAYS start + interval (not "start itself")
+ * Example: if start = Feb 21 and weekly => next = Feb 28
+ */
 export function computeNextRenewal(start: Date, cycle: BillingCycle) {
   const d = new Date(start);
+  d.setHours(0, 0, 0, 0);
 
   if (cycle === "weekly") {
     d.setDate(d.getDate() + 7);
@@ -29,6 +48,9 @@ export function computeNextRenewal(start: Date, cycle: BillingCycle) {
   return d;
 }
 
-export function toISODate(d: Date) {
-  return d.toISOString().slice(0, 10);
+/** Format YYYY-MM-DD safely (no timezone shift) */
+export function fmtYMD(ymd: string) {
+  if (!ymd) return "";
+  const d = parseLocalYMD(ymd);
+  return d.toLocaleDateString();
 }
