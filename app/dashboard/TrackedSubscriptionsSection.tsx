@@ -7,6 +7,7 @@ import TrackedSubscriptionForm, {
 } from "./TrackedSubscriptionForm";
 import type { TrackedSub } from "./types";
 import { effectiveNextRenewal } from "@/lib/subscriptions/effectiveNextRenewal";
+import { parseLocalYMD } from "@/lib/date";
 
 export default function TrackedSubscriptionsSection({
   initialSubs,
@@ -178,7 +179,19 @@ function getEffectiveRenewalDate(s: any): Date | null {
       String(s.status ?? "").toLowerCase() === "cancelled" || !!s.cancelled_at,
   });
 
-  return next ? startOfDay(new Date(next)) : null;
+  if (!next) return null;
+
+  // If engine returned YYYY-MM-DD (date-only) parse as LOCAL to avoid UTC-shift
+  if (typeof next === "string" && /^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    const parsed = parseLocalYMD(next); // returns new Date(y,m-1,d)
+    if (Number.isNaN(parsed.getTime())) return null;
+    return startOfDay(parsed);
+  }
+
+  // Otherwise assume it's an ISO timestamp and fall back to Date()
+  const d = new Date(String(next));
+  if (Number.isNaN(d.getTime())) return null;
+  return startOfDay(d);
 }
 
 function daysUntilDate(target: Date, todayBase?: Date) {
