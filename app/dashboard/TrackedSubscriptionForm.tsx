@@ -1,4 +1,3 @@
-// app/dashboard/TrackedSubscriptionForm.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -39,7 +38,13 @@ export default function TrackedSubscriptionForm({
   const [currency, setCurrency] = useState("USD");
 
   const [billingCycle, setBillingCycle] = useState<
-    "weekly" | "every_2_weeks" | "monthly" | "every_3_months" | "every_6_months" | "yearly" | "custom"
+    | "weekly"
+    | "every_2_weeks"
+    | "monthly"
+    | "every_3_months"
+    | "every_6_months"
+    | "yearly"
+    | "custom"
   >("monthly");
 
   const [customIntervalNumber, setCustomIntervalNumber] = useState(3);
@@ -70,6 +75,19 @@ export default function TrackedSubscriptionForm({
     if (!merchantName || !computedNextRenewal || !amount) return false;
     return dedupeKeySet.has(dedupeKey);
   }, [dedupeKey, dedupeKeySet, merchantName, computedNextRenewal, amount]);
+
+  function resetForm() {
+    setMerchantName("");
+    setPlanName("");
+    setAmount("9.99");
+    setCurrency("USD");
+    setBillingCycle("monthly");
+    setCustomIntervalNumber(3);
+    setCustomIntervalUnit("months");
+    setStartDate(toInputDateString(new Date()));
+    setNotes("");
+    setBanner(null);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,192 +128,223 @@ export default function TrackedSubscriptionForm({
       }
 
       const result = await onCreate(payload);
-
       if (!result.ok) {
         setBanner(result.message ?? "Something went wrong.");
         return;
       }
 
-      // reset
-      setMerchantName("");
-      setPlanName("");
-      setAmount("9.99");
-      setCurrency("USD");
-      setBillingCycle("monthly");
-      setCustomIntervalNumber(3);
-      setCustomIntervalUnit("months");
-      setStartDate(toInputDateString(new Date()));
-      setNotes("");
+      resetForm();
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="border rounded-lg p-4">
-      <h3 className="text-lg font-semibold">Add a tracked subscription</h3>
+    <section
+      id="add-subscription"
+      className="rounded-[26px] border border-black/10 bg-white px-8 py-7 shadow-[0_10px_25px_rgba(0,0,0,0.04)]"
+    >
+      <div className="text-[11px] tracking-[0.34em] text-black/45">ADD SUBSCRIPTION</div>
 
       {isPotentialDuplicate ? (
-        <div className="mt-2 border rounded-md p-2 bg-yellow-50 text-sm text-amber-800">
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           ⚠️ Looks like a duplicate (same merchant + amount + renewal date).
         </div>
       ) : null}
 
-      {banner ? <div className="mt-2 border rounded-md p-2">{banner}</div> : null}
+      {banner ? (
+        <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm text-black/70">
+          {banner}
+        </div>
+      ) : null}
 
-      <form onSubmit={submit} className="mt-4 space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Vendor</label>
-          <input
-            className="border rounded-md p-2 w-full bg-transparent"
-            value={merchantName}
-            onChange={(e) => setMerchantName(e.target.value)}
-            placeholder="Amazon Prime"
-            required
-          />
+      <form onSubmit={submit} className="mt-6 space-y-6">
+        {/* Vendor + Plan */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Field label="VENDOR">
+            <Input
+              value={merchantName}
+              onChange={(e) => setMerchantName(e.target.value)}
+              placeholder="Netflix"
+              required
+            />
+          </Field>
+
+          <Field label="PLAN">
+            <Input
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              placeholder="Premium"
+            />
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Plan (optional)</label>
-          <input
-            className="border rounded-md p-2 w-full bg-transparent"
-            value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
-            placeholder="Prime Monthly / Basic"
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-sm mb-1">Amount</label>
-            <input
-              className="border rounded-md p-2 w-full bg-transparent"
+        {/* Amount + Currency + Cycle */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Field label="AMOUNT">
+            <Input
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
               required
             />
-          </div>
+          </Field>
 
-          <div className="w-32">
-            <label className="block text-sm mb-1">Currency</label>
-            <select
-              className="border rounded-md p-2 w-full bg-transparent"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
+          <Field label="CURRENCY">
+            <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               <option value="USD">USD</option>
               <option value="INR">INR</option>
               <option value="EUR">EUR</option>
               <option value="GBP">GBP</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
+
+          <Field label="CYCLE">
+            <Select
+              value={billingCycle}
+              onChange={(e) => setBillingCycle(e.target.value as any)}
+            >
+              <option value="weekly">Weekly</option>
+              <option value="every_2_weeks">2 weeks</option>
+              <option value="monthly">Monthly</option>
+              <option value="every_3_months">3 months</option>
+              <option value="every_6_months">6 months</option>
+              <option value="yearly">Yearly</option>
+              <option value="custom">Custom interval...</option>
+            </Select>
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Billing cycle</label>
-          <select
-            className="border rounded-md p-2 w-full bg-transparent"
-            value={billingCycle}
-            onChange={(e) => setBillingCycle(e.target.value as any)}
-          >
-            <option value="weekly">Weekly</option>
-            <option value="every_2_weeks">2 weeks</option>
-            <option value="monthly">Monthly</option>
-            <option value="every_3_months">3 months</option>
-            <option value="every_6_months">6 months</option>
-            <option value="yearly">Yearly</option>
-            <option value="custom">Custom interval...</option>
-          </select>
-        </div>
-
+        {/* Custom interval */}
         {billingCycle === "custom" ? (
-          <div className="flex gap-2 items-center">
-            <div className="w-24">
-              <input
-                type="number"
-                min={1}
-                className="border rounded-md p-2 w-full bg-transparent"
-                value={String(customIntervalNumber)}
-                onChange={(e) => {
-                  const v = Number(e.target.value || 1);
-                  setCustomIntervalNumber(v < 1 ? 1 : v);
-                }}
-              />
-            </div>
-
-            <div className="flex-1">
-              <select
-                className="border rounded-md p-2 w-full bg-transparent"
-                value={customIntervalUnit}
-                onChange={(e) => setCustomIntervalUnit(e.target.value as CustomUnit)}
-              >
-                <option value="days">days</option>
-                <option value="months">months</option>
-                <option value="years">years</option>
-              </select>
-            </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Field label="CUSTOM INTERVAL">
+              <div className="flex gap-3">
+                <Input
+                  type="number"
+                  min={1}
+                  value={String(customIntervalNumber)}
+                  onChange={(e) => {
+                    const v = Number(e.target.value || 1);
+                    setCustomIntervalNumber(v < 1 ? 1 : v);
+                  }}
+                />
+                <Select
+                  value={customIntervalUnit}
+                  onChange={(e) => setCustomIntervalUnit(e.target.value as CustomUnit)}
+                >
+                  <option value="days">days</option>
+                  <option value="months">months</option>
+                  <option value="years">years</option>
+                </Select>
+              </div>
+            </Field>
           </div>
         ) : null}
 
-        <div>
-          <label className="block text-sm mb-1">Start date</label>
-          <input
-            type="date"
-            className="border rounded-md p-2 w-full bg-transparent"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            required
-          />
+        {/* Next renewal + Notes */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Field label="NEXT RENEWAL">
+            <div className="relative">
+              <input
+                readOnly
+                value={computedNextRenewal ? formatDisplayDate(computedNextRenewal) : ""}
+                placeholder="02/28/2026"
+                className="h-12 w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 text-sm font-medium text-black/70 outline-none"
+              />
+              {/* show raw ymd on right like your screenshot */}
+              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-black/45">
+                {computedNextRenewal || ""}
+              </div>
+            </div>
+          </Field>
+
+          <Field label="NOTES">
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+            />
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Next renewal</label>
-          <div className="rounded-md border p-2 bg-gray-50 text-right font-medium">
-            {computedNextRenewal ? computedNextRenewal : "—"}
-          </div>
+        {/* Start date (keep, but tuck it visually) */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Field label="START DATE">
+            <input
+              type="date"
+              className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black/80 outline-none"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Notes (optional)</label>
-          <input
-            className="border rounded-md p-2 w-full bg-transparent"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g., cancel from Amazon settings page"
-          />
-        </div>
-
-        <div className="flex gap-2">
+        {/* Actions */}
+        <div className="flex items-center gap-4 pt-2">
           <button
-            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
-            disabled={saving}
             type="submit"
+            disabled={saving}
+            className="inline-flex h-12 items-center gap-3 rounded-2xl bg-emerald-500 px-6 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(16,185,129,0.25)] hover:bg-emerald-600 disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Add Subscription"}
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/20 text-lg">
+              +
+            </span>
+            {saving ? "Saving..." : "ADD"}
           </button>
 
           <button
             type="button"
-            className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-black/5"
-            onClick={() => {
-              setMerchantName("");
-              setPlanName("");
-              setAmount("9.99");
-              setCurrency("USD");
-              setBillingCycle("monthly");
-              setCustomIntervalNumber(3);
-              setCustomIntervalUnit("months");
-              setStartDate(toInputDateString(new Date()));
-              setNotes("");
-              setBanner(null);
-            }}
+            onClick={resetForm}
+            className="inline-flex h-12 items-center gap-3 rounded-2xl px-3 text-sm font-semibold text-black/60 hover:bg-black/5"
           >
+            <span className="grid h-10 w-10 place-items-center rounded-2xl border border-black/10 bg-white">
+              ↻
+            </span>
             Reset
           </button>
         </div>
       </form>
+    </section>
+  );
+}
+
+/* ---------------- UI bits ---------------- */
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[11px] tracking-[0.34em] text-black/45">{label}</div>
+      <div className="mt-3">{children}</div>
     </div>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={[
+        "h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black/80 outline-none",
+        "placeholder:text-black/30",
+        "focus:border-black/20",
+        props.className ?? "",
+      ].join(" ")}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={[
+        "h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black/80 outline-none",
+        "focus:border-black/20",
+        props.className ?? "",
+      ].join(" ")}
+    />
   );
 }
 
@@ -306,14 +355,12 @@ function isYMD(s: string) {
 }
 
 function parseLocalYMD(ymd: string) {
-  // IMPORTANT: parse YYYY-MM-DD in LOCAL time (prevents UTC shifting)
   if (!isYMD(ymd)) return new Date(ymd);
   const [y, m, d] = ymd.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
 function normalizeYMD(dateStr: string) {
-  // input type="date" already returns YYYY-MM-DD, keep it
   if (!dateStr) return "";
   if (isYMD(dateStr)) return dateStr;
   const d = new Date(dateStr);
@@ -356,9 +403,6 @@ function addYears(d: Date, n: number) {
   return r;
 }
 
-/**
- * ✅ Computes NEXT renewal = start + interval (not start itself)
- */
 function computeNextRenewal(
   startDateInput: string,
   billingCycle: string,
@@ -413,10 +457,8 @@ function computeNextRenewal(
     return addYears(d, stepN);
   };
 
-  // ✅ first renewal is start + interval
   let candidate = startOfDay(stepOnce(start));
 
-  // then advance until candidate >= today
   let iterations = 0;
   while (candidate.getTime() < today.getTime() && iterations < 2000) {
     candidate = startOfDay(stepOnce(candidate));
@@ -442,4 +484,11 @@ function makeDedupeKey(
     (currency || "").trim().toUpperCase(),
     normalizeYMD(renewal_date || ""),
   ].join("|");
+}
+
+/* show MM/DD/YYYY from YYYY-MM-DD for the left display */
+function formatDisplayDate(ymd: string) {
+  if (!isYMD(ymd)) return ymd;
+  const d = parseLocalYMD(ymd);
+  return d.toLocaleDateString("en-US");
 }

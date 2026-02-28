@@ -3,22 +3,49 @@
 type Props = {
   total: number;
   currency: string;
+  activeCount?: number;
+  dueSoonCount?: number;
 };
 
-export default function ForecastCard({ total, currency }: Props) {
+export default function ForecastCard({
+  total,
+  currency,
+  activeCount = 0,
+  dueSoonCount = 0,
+}: Props) {
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-zinc-900">
-        Payment Forecast
-      </h2>
+    <section className="rounded-3xl bg-emerald-500 p-6 shadow-sm text-white">
+      <div className="text-xs tracking-[0.35em] opacity-90">
+        30-DAY FORECAST
+      </div>
 
-      <div className="mt-6 rounded-2xl bg-emerald-50 p-6 text-center">
-        <p className="text-sm text-zinc-600">
-          Expected in Next 30 Days
-        </p>
-        <p className="mt-2 text-4xl font-bold text-emerald-600">
+      <div className="mt-5 text-center">
+        <div className="text-5xl font-black tracking-tight">
           {currency} {total.toFixed(2)}
-        </p>
+        </div>
+        <div className="mt-1 text-sm opacity-90">
+          expected charges
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-white/15 px-4 py-4 text-center">
+          <div className="text-xs tracking-[0.25em] opacity-90">
+            Active
+          </div>
+          <div className="mt-2 text-2xl font-bold">
+            {activeCount}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white/15 px-4 py-4 text-center">
+          <div className="text-xs tracking-[0.25em] opacity-90">
+            Due soon
+          </div>
+          <div className="mt-2 text-2xl font-bold">
+            {dueSoonCount}
+          </div>
+        </div>
       </div>
     </section>
   );

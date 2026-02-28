@@ -33,70 +33,63 @@ export default function TrackedSubscriptionsSection({
     });
   }, [subs]);
 
-  // ✅ Renewing Soon (next 7 days) — ACTIVE ONLY — using effective date
-  const renewingSoon = useMemo(() => {
-    const list = subsWithEffective
-      .filter((s: any) => String(s.status || "").toLowerCase() === "active")
-      .filter((s: any) => s.daysLeft !== null && s.daysLeft >= 0 && s.daysLeft <= 7)
-      .sort((a: any, b: any) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
-
-    return list;
-  }, [subsWithEffective]);
-
   // Used for duplicate warning in UI
   const dedupeKeySet = useMemo(() => {
     const set = new Set<string>();
     for (const s of subs as any[]) {
-      set.add(makeDedupeKey(s.merchant_name, s.amount, s.currency, s.renewal_date));
+      set.add(
+        makeDedupeKey(s.merchant_name, s.amount, s.currency, s.renewal_date)
+      );
     }
     return set;
   }, [subs]);
 
-const onCreate = async (payload: CreateTrackedSubPayload) => {
-  const res = await fetch("/api/tracked-subscriptions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const onCreate = async (payload: CreateTrackedSubPayload) => {
+    const res = await fetch("/api/tracked-subscriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
 
-  if (res.status === 409) {
-    return {
-      ok: false as const,
-      reason: "duplicate" as const,
-      message: data?.error,
-    };
-  }
+    if (res.status === 409) {
+      return {
+        ok: false as const,
+        reason: "duplicate" as const,
+        message: data?.error,
+      };
+    }
 
-  if (!res.ok) {
-    return {
-      ok: false as const,
-      reason: "error" as const,
-      message: data?.error ?? "Failed to add subscription",
-    };
-  }
+    if (!res.ok) {
+      return {
+        ok: false as const,
+        reason: "error" as const,
+        message: data?.error ?? "Failed to add subscription",
+      };
+    }
 
-  const created = (data as any)?.sub as TrackedSub | undefined;
+    const created = (data as any)?.sub as TrackedSub | undefined;
 
-  if (!created?.id) {
-    return {
-      ok: false as const,
-      reason: "error" as const,
-      message: (data as any)?.error ?? "Create failed",
-    };
-  }
+    if (!created?.id) {
+      return {
+        ok: false as const,
+        reason: "error" as const,
+        message: (data as any)?.error ?? "Create failed",
+      };
+    }
 
-  setSubs((prev) => {
-    const next: TrackedSub[] = [created, ...prev];
-    next.sort((a, b) =>
-      String(a.renewal_date).localeCompare(String(b.renewal_date))
-    );
-    return next;
-  });
+    setSubs((prev) => {
+      const next: TrackedSub[] = [created, ...prev];
+      next.sort((a, b) =>
+        String(a.renewal_date).localeCompare(String(b.renewal_date))
+      );
+      return next;
+    });
 
-  return { ok: true as const };
-};
+    return { ok: true as const };
+  };
+
   const onDelete = async (id: string) => {
     if (!id) return alert("Missing id");
     if (!confirm("Delete this tracked subscription?")) return;
@@ -148,17 +141,22 @@ const onCreate = async (payload: CreateTrackedSubPayload) => {
   };
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 space-y-8">
+      {/* ✅ FORM FIRST */}
+      <div id="add-subscription">
+        <TrackedSubscriptionForm
+          dedupeKeySet={dedupeKeySet}
+          onCreate={onCreate}
+        />
+      </div>
+
+      {/* ✅ LIST AFTER */}
       <TrackedSubscriptionList
-        subs={subsWithEffective as any} // ✅ pass effective_renewal_date + daysLeft
+        subs={subsWithEffective as any}
         busyId={busyId}
         onDelete={onDelete}
         onToggleCancel={onToggleCancel}
       />
-
-      <div className="mt-6">
-        <TrackedSubscriptionForm dedupeKeySet={dedupeKeySet} onCreate={onCreate} />
-      </div>
     </div>
   );
 }
@@ -188,7 +186,7 @@ function getEffectiveRenewalDate(s: any): Date | null {
     return startOfDay(parsed);
   }
 
-  // Otherwise assume it's an ISO timestamp and fall back to Date()
+  // Otherwise assume it's an ISO timestamp
   const d = new Date(String(next));
   if (Number.isNaN(d.getTime())) return null;
   return startOfDay(d);
