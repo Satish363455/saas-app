@@ -240,23 +240,47 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
 
-  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    if (userErr) {
+      return NextResponse.json(
+        { error: userErr.message ?? "Auth error" },
+        { status: 401 }
+      );
+    }
 
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    if (!user) {
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
 
-  const { error } = await supabase
-    .from("tracked_subscriptions")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true });
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from("tracked_subscriptions")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // ✅ Always JSON response
+    return NextResponse.json({ ok: true, id }, { status: 200 });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message ?? "Delete failed" },
+      { status: 500 }
+    );
+  }
 }
