@@ -21,6 +21,22 @@ function requireEnv(name: string): string {
   return v;
 }
 
+// Accept either:
+// 1) Authorization: Bearer <CRON_SECRET> (Vercel Cron style)
+// 2) ?secret=<CRON_SECRET> (manual testing)
+function getAuthSecret(req: NextRequest) {
+  const url = new URL(req.url);
+
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "").trim()
+    : "";
+
+  const querySecret = url.searchParams.get("secret")?.trim() || "";
+
+  return bearer || querySecret;
+}
+
 function isYMD(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -111,14 +127,16 @@ async function sendReminderEmail(args: {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const secret = searchParams.get("secret");
     const debug = searchParams.get("debug") === "1";
 
     // mode=test lets you test without updating last_reminded_renewal_date
     const mode = searchParams.get("mode") || "";
     const isTest = mode === "test";
 
-    if (!secret || secret !== process.env.CRON_SECRET) {
+    const secret = getAuthSecret(req);
+    const expected = process.env.CRON_SECRET;
+
+    if (!expected || !secret || secret !== expected) {
       return json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -211,7 +229,7 @@ export async function GET(req: NextRequest) {
 
       due++;
 
-      // ✅ Send only once per renewal date (dedupe)
+      // ✅ Send only once per renewal date (dedupe) - skip dedupe only in test mode
       if (!isTest && String(s.last_reminded_renewal_date || "") === String(next)) {
         if (debug) results.push({ id: s.id, skipped: "already_reminded", next, daysLeft });
         continue;
